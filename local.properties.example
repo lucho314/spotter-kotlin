@@ -1,0 +1,13 @@
+# Copy this file to local.properties (which is gitignored) and fill in the values.
+# sdk.dir is usually set automatically by Android Studio.
+sdk.dir=
+
+# Supabase project URL, e.g. https://xxxxx.supabase.co
+SUPABASE_URL=
+
+# Supabase anon (public) API key.
+SUPABASE_ANON_KEY=
+
+# Google OAuth web client id for Credential Manager sign-in. Leave empty to
+# fall back to browser-based PKCE sign-in.
+GOOGLE_WEB_CLIENT_ID=

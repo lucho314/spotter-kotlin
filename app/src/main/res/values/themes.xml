@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Spotter" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/spotter_background</item>
+        <item name="android:navigationBarColor">@color/spotter_background</item>
+        <item name="android:windowBackground">@color/spotter_background</item>
+    </style>
+
+    <style name="Theme.Spotter.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/spotter_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Spotter</item>
+    </style>
+</resources>

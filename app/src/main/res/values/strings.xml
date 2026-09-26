@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Spotter</string>
+
+    <!-- Login -->
+    <string name="login_logo">SPOTTER</string>
+    <string name="login_subtitle">Tu diario de entrenamiento</string>
+    <string name="login_google_button">Continuar con Google</string>
+    <string name="login_google_button_loading">Conectando…</string>
+    <string name="login_error_title">Error al iniciar sesión</string>
+    <string name="error_login_failed">No pudimos verificar tu cuenta de Google. Intentá de nuevo.</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_badge">BIENVENIDO/A</string>
+    <string name="onboarding_description">Spotter es tu compañero de entrenamiento. Registrá tus rutinas, seguí tu progreso y superá tus límites.</string>
+    <string name="onboarding_default_name">Atleta</string>
+    <string name="onboarding_cta">Empezar</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_dashboard">Inicio</string>
+    <string name="nav_routines">Rutinas</string>
+    <string name="nav_history">Historial</string>
+    <string name="nav_progress">Progreso</string>
+    <string name="nav_profile">Perfil</string>
+
+    <string name="placeholder_coming_soon">Próximamente</string>
+
+    <!-- Profile (minimal skeleton) -->
+    <string name="profile_sign_out">Cerrar sesión</string>
+    <string name="profile_sign_out_confirm_title">¿Cerrar sesión?</string>
+    <string name="profile_sign_out_confirm_message">Vas a tener que volver a iniciar sesión la próxima vez.</string>
+
+    <!-- Config error -->
+    <string name="config_error_title">Configuración inválida</string>
+    <string name="config_error_message">Falta configurar la URL o la clave de Supabase. Revisá local.properties.</string>
+
+    <!-- Generic -->
+    <string name="generic_cancel">Cancelar</string>
+    <string name="generic_confirm">Confirmar</string>
+    <string name="generic_retry">Reintentar</string>
+    <string name="generic_back">Volver</string>
+    <string name="generic_delete">Eliminar</string>
+    <string name="generic_edit">Editar</string>
+    <string name="generic_save">Guardar</string>
+
+    <!-- AppError messages -->
+    <string name="error_network">Sin conexión. Revisá tu internet e intentá de nuevo.</string>
+    <string name="error_unauthorized">Tu sesión expiró. Iniciá sesión de nuevo.</string>
+    <string name="error_not_found">No se encontró lo que buscabas.</string>
+    <string name="error_conflict">Esa acción ya se hizo o entra en conflicto con algo existente.</string>
+    <string name="error_server">Ocurrió un error del servidor. Intentá más tarde.</string>
+    <string name="error_unknown">Ocurrió un error inesperado.</string>
+    <string name="error_validation">Revisá los datos ingresados.</string>
+    <!-- Review carry-over: a Conflict (23505) while moving/editing a routine exercise always means
+         the exact same exercise already sits on the target day (unique constraint), including
+         "sin día asignado" - this replaces the generic error_conflict with a specific message. -->
+    <string name="error_exercise_already_in_day">Ese ejercicio ya está agregado en ese día.</string>
+
+    <!-- Validation reasons -->
+    <string name="validation_name_empty">El nombre no puede estar vacío.</string>
+    <string name="validation_name_too_long">El nombre no puede tener más de 50 caracteres.</string>
+    <string name="validation_description_too_long">La descripción no puede tener más de 200 caracteres.</string>
+    <string name="validation_days_per_week_range">Los días por semana deben estar entre 1 y 7.</string>
+    <string name="validation_sets_range">Las series deben estar entre 1 y 20.</string>
+    <string name="validation_reps_range">Las repeticiones deben estar entre 1 y 100.</string>
+    <string name="validation_rest_range">El descanso debe estar entre 15 y 600 segundos.</string>
+    <string name="validation_weight_invalid">Ingresá un peso válido.</string>
+    <string name="validation_weight_range">El peso debe estar entre 0 y 1000 kg.</string>
+    <string name="validation_body_weight_range">El peso corporal debe estar entre 20 y 400 kg.</string>
+    <string name="validation_height_range">La altura debe estar entre 100 y 250 cm.</string>
+    <string name="validation_birth_date_invalid">Ingresá una fecha de nacimiento válida.</string>
+    <string name="validation_share_code_invalid">Ese código no es válido.</string>
+    <string name="validation_image_too_large">La imagen es demasiado grande.</string>
+    <string name="validation_image_unreadable">No pudimos leer esa imagen.</string>
+    <string name="validation_no_exercises">Agregá al menos un ejercicio.</string>
+    <string name="validation_exercise_already_in_routine">Ese ejercicio ya está en la rutina.</string>
+    <string name="validation_day_already_exists">Ese día ya existe.</string>
+    <string name="validation_days_max_reached">Ya usaste los 7 días de la semana en esta rutina.</string>
+
+    <!-- Exercise labels (equipment / difficulty / category) -->
+    <string name="equipment_barbell">Barra</string>
+    <string name="equipment_dumbbell">Mancuernas</string>
+    <string name="equipment_machine">Máquina</string>
+    <string name="equipment_cable">Polea</string>
+    <string name="equipment_bodyweight">Peso corporal</string>
+    <string name="equipment_kettlebell">Pesa rusa</string>
+    <string name="equipment_band">Banda</string>
+    <string name="equipment_other">Otro</string>
+    <string name="difficulty_beginner">Principiante</string>
+    <string name="difficulty_intermediate">Intermedio</string>
+    <string name="difficulty_advanced">Avanzado</string>
+    <string name="category_compound">Compuesto</string>
+    <string name="category_isolation">Aislamiento</string>
+    <string name="category_cardio">Cardio</string>
+    <string name="category_stretch">Estiramiento</string>
+    <string name="category_plyometric">Pliométrico</string>
+
+    <!-- Exercise detail -->
+    <string name="exercise_detail_secondary_muscles">Músculos secundarios</string>
+    <string name="exercise_detail_instructions">Instrucciones</string>
+
+    <!-- Routines: list -->
+    <string name="routines_title">Mis Rutinas</string>
+    <string name="routines_create">Crear rutina</string>
+    <string name="routines_import_image">Importar con IA</string>
+    <string name="routines_import_code_placeholder">Código (ej: K7MN3QXP)</string>
+    <string name="routines_import_code_action">Importar</string>
+    <string name="routines_explore_templates">Explorar plantillas</string>
+    <string name="routines_explore_templates_subtitle">Programas armados por objetivo</string>
+    <string name="routines_new_badge">NUEVO</string>
+    <string name="routines_archived_entry">Archivadas</string>
+    <string name="routines_archived_title">Rutinas archivadas</string>
+    <string name="routines_archived_empty">No archivaste ninguna rutina todavía.</string>
+    <string name="routines_restore">Restaurar</string>
+    <string name="routines_empty_title">Todavía no tenés rutinas</string>
+    <string name="routines_empty_description">Creá tu primera rutina o explorá las plantillas.</string>
+    <string name="routines_archive_confirm_title">¿Archivar rutina?</string>
+    <string name="routines_archive_confirm_message">¿Archivás \"%1$s\"? Podés recuperarla después.</string>
+    <string name="routines_days_per_week">%1$d x/semana</string>
+
+    <!-- Shared plural: exercise count (routine card, template day card). -->
+    <plurals name="exercise_count">
+        <item quantity="one">%1$d ejercicio</item>
+        <item quantity="other">%1$d ejercicios</item>
+    </plurals>
+
+    <!-- Shared plurals: sets/reps, composed together in RoutineExerciseSummary.kt. -->
+    <plurals name="sets_count">
+        <item quantity="one">%1$d serie</item>
+        <item quantity="other">%1$d series</item>
+    </plurals>
+    <plurals name="reps_count">
+        <item quantity="one">%1$d rep</item>
+        <item quantity="other">%1$d reps</item>
+    </plurals>
+
+    <!-- Routines: create/edit -->
+    <string name="routine_edit_title_create">Nueva rutina</string>
+    <string name="routine_edit_title_edit">Editar rutina</string>
+    <string name="routine_edit_name_label">Nombre</string>
+    <string name="routine_edit_description_label">Descripción</string>
+    <string name="routine_edit_days_per_week_label">Días por semana</string>
+    <string name="routine_edit_sets_label">Series</string>
+    <string name="routine_edit_reps_label">Repeticiones</string>
+    <string name="routine_edit_rest_label">Descanso (seg)</string>
+    <string name="routine_edit_templates_banner">¿Preferís empezar de una plantilla? Explorá %1$d programas armados.</string>
+
+    <!-- Routines: detail -->
+    <string name="routine_detail_share">Compartir</string>
+    <string name="routine_detail_add_exercise">Agregar ejercicio</string>
+    <string name="routine_detail_menu_more">Más opciones</string>
+    <string name="routine_detail_menu_edit">Editar</string>
+    <string name="routine_detail_menu_archive">Archivar</string>
+    <string name="routine_detail_archive_confirm_title">¿Archivar rutina?</string>
+    <string name="routine_detail_archive_confirm_message">¿Archivás \"%1$s\"? Podés recuperarla después.</string>
+    <string name="routine_detail_unassigned_day">Sin día asignado</string>
+    <string name="routine_detail_day_empty">Sin ejercicios — tocá + para agregar</string>
+    <string name="routine_detail_add_day">Agregar día</string>
+    <string name="routine_detail_rename_day">Cambiar día</string>
+    <string name="routine_detail_delete_day">Eliminar día</string>
+    <string name="routine_detail_delete_day_confirm_title">Eliminar día</string>
+    <string name="routine_detail_delete_day_confirm_message_empty">¿Eliminás \"%1$s\"?</string>
+    <plurals name="routine_detail_delete_day_confirm_message_with_exercises">
+        <item quantity="one">\"%1$s\" tiene %2$d ejercicio. Si eliminás el día, el ejercicio queda sin día asignado.</item>
+        <item quantity="other">\"%1$s\" tiene %2$d ejercicios. Si eliminás el día, los ejercicios quedan sin día asignado.</item>
+    </plurals>
+    <string name="routine_detail_remove_exercise_confirm_title">Eliminar ejercicio</string>
+    <string name="routine_detail_remove_exercise_confirm_message">¿Eliminás \"%1$s\" de la rutina?</string>
+    <string name="routine_detail_drag_handle">Reordenar</string>
+    <string name="routine_detail_organize_by_days">Organizar por días</string>
+    <string name="routine_detail_empty_title">Sin ejercicios</string>
+    <string name="routine_detail_empty_description">Tocá el + para agregar ejercicios a tu rutina</string>
+    <string name="routine_detail_edit_exercise_title">Editar ejercicio</string>
+    <string name="routine_detail_move_to_day">Mover a día</string>
+    <string name="routine_detail_start_workout">Iniciar Entrenamiento</string>
+    <string name="routine_detail_start_needs_exercises">Agregá ejercicios primero</string>
+    <string name="routine_exercise_summary_format">%1$s × %2$s · %3$ds descanso</string>
+    <string name="add_exercise_added_snackbar">%1$s agregado</string>
+
+    <!-- Design system: NumberStepper accessibility -->
+    <string name="number_stepper_decrease">Disminuir %1$s</string>
+    <string name="number_stepper_increase">Aumentar %1$s</string>
+
+    <!-- Routines: add exercise -->
+    <string name="add_exercise_title">Agregar ejercicio</string>
+    <string name="add_exercise_search_placeholder">Buscar ejercicio…</string>
+    <string name="add_exercise_all_groups">Todos</string>
+    <string name="add_exercise_muscle_and_equipment">%1$s · %2$s</string>
+    <string name="add_exercise_already_added">Ya agregado</string>
+    <string name="add_exercise_confirm">Agregar</string>
+    <string name="add_exercise_error_conflict">Ejercicio ya agregado</string>
+
+    <!-- Templates -->
+    <string name="templates_title">Explorar Plantillas</string>
+    <string name="templates_empty">No hay plantillas con esos filtros</string>
+    <string name="templates_days_per_week_label">Días/semana:</string>
+    <string name="templates_days_per_week_badge">%1$d días/sem</string>
+    <string name="template_goal_strength">Fuerza</string>
+    <string name="template_goal_hypertrophy">Hipertrofia</string>
+    <string name="template_goal_fat_loss">Quema Grasa</string>
+    <string name="template_goal_general">General</string>
+    <string name="template_detail_structure">Estructura del programa</string>
+    <string name="template_exercise_unknown">Ejercicio</string>
+    <string name="template_adopt_action">Usar esta rutina</string>
+    <string name="template_adopt_loading">Creando rutinas…</string>
+    <string name="template_adopt_confirm_title">Usar esta rutina</string>
+    <plurals name="template_adopt_confirm_message">
+        <item quantity="one">Se creará %1$d rutina en tu lista. ¿Continuar?</item>
+        <item quantity="other">Se crearán %1$d rutinas en tu lista (una por día). ¿Continuar?</item>
+    </plurals>
+    <string name="template_adopt_confirm_action">Crear rutinas</string>
+    <string name="templates_routines_created">¡Rutinas creadas! Las encontrás en Mis Rutinas</string>
+
+    <!-- Notifications: rest timer -->
+    <string name="notification_channel_rest_timer_name">Descanso entre series</string>
+    <string name="notification_channel_rest_timer_description">Avisa cuando termina el descanso entre series de un entrenamiento.</string>
+    <string name="notification_rest_timer_title">Descanso terminado</string>
+
+    <!-- Routine detail: start workout -->
+    <string name="routine_detail_active_workout_title">Tenés un entrenamiento en curso</string>
+    <string name="routine_detail_active_workout_message">"%1$s" está en curso. ¿Querés continuarlo o empezar uno nuevo?</string>
+    <string name="routine_detail_active_workout_continue">Continuar</string>
+    <string name="routine_detail_active_workout_discard">Descartar y empezar</string>
+    <string name="routine_detail_start_day_picker_title">¿Qué día vas a entrenar?</string>
+
+    <!-- Routines: active workout banner -->
+    <string name="routines_active_workout_title">Entrenamiento en curso · Continuar</string>
+
+    <!-- Workout -->
+    <string name="workout_close">Cerrar</string>
+    <string name="workout_finish_action">Finalizar</string>
+    <string name="workout_finish_confirm_title">¿Terminaste tu sesión?</string>
+    <string name="workout_finish_confirm_message">Se guardarán las series completadas de este entrenamiento.</string>
+    <string name="workout_finish_empty_title">No registraste ninguna serie</string>
+    <string name="workout_finish_empty_message">¿Descartar este entrenamiento?</string>
+    <string name="workout_finish_empty_back">Volver</string>
+    <string name="workout_discard_action">Descartar</string>
+    <string name="workout_discard_confirm_title">Cancelar entrenamiento</string>
+    <string name="workout_discard_confirm_message">¿Salís sin guardar? Vas a perder el progreso de esta sesión.</string>
+    <string name="workout_offline_banner">Sin conexión — los entrenamientos se guardan localmente</string>
+    <string name="workout_finished_online">¡Entrenamiento completado!</string>
+    <string name="workout_finished_offline">Guardado sin conexión. Se sincronizará cuando vuelva internet.</string>
+    <string name="workout_exercise_index">EJERCICIO %1$d DE %2$d</string>
+    <string name="workout_last_session">Último entrenamiento</string>
+    <string name="workout_last_session_title">Último entrenamiento</string>
+    <string name="workout_last_session_empty">Todavía no entrenaste este ejercicio.</string>
+    <string name="workout_rest_label">DESCANSO</string>
+    <string name="workout_rest_skip">Saltar</string>
+    <string name="workout_unit_kg">KG</string>
+    <string name="workout_unit_lb">LB</string>
+    <string name="workout_reps_header">REPS</string>
+    <string name="workout_set_complete">Completar serie</string>
+    <string name="workout_set_uncomplete">Descompletar serie</string>
+    <string name="workout_add_set">Agregar serie</string>
+    <string name="workout_previous">← Anterior</string>
+    <string name="workout_next">Siguiente →</string>
+    <string name="workout_target_sets_reps_format">%1$s × %2$s</string>
+    <plurals name="workout_sets_registered">
+        <item quantity="one">%1$d serie registrada</item>
+        <item quantity="other">%1$d series registradas</item>
+    </plurals>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="spotter_background">#0E0E0E</color>
+    <color name="spotter_primary_container">#D1FC00</color>
+    <color name="spotter_on_primary">#546600</color>
+    <color name="iconBackground">#0E0E0E</color>
+</resources>
