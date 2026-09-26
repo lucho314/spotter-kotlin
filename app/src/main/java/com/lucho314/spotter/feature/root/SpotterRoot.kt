@@ -28,7 +28,7 @@ import com.lucho314.spotter.core.navigation.ImportCodeRoute
 import com.lucho314.spotter.core.navigation.OnboardingRoute
 import com.lucho314.spotter.core.navigation.SpotterNavHost
 import com.lucho314.spotter.core.navigation.TopLevelDestination
-import com.lucho314.spotter.core.navigation.WorkoutRoute
+import com.lucho314.spotter.core.navigation.navigateToWorkout
 import com.lucho314.spotter.domain.model.ShareCode
 import com.lucho314.spotter.feature.auth.LoginScreen
 import kotlinx.coroutines.flow.first
@@ -126,7 +126,7 @@ private fun AuthenticatedApp(
         LaunchedEffect(pendingOpenWorkout) {
             if (!pendingOpenWorkout) return@LaunchedEffect
             navController.currentBackStackEntryFlow.first()
-            navController.navigate(WorkoutRoute)
+            navController.navigateToWorkout()
             onOpenWorkoutConsumed()
         }
     }

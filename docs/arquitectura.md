@@ -1,6 +1,6 @@
 # Arquitectura de Spotter
 
-Estado: refleja el código tras **FASES 1-3** (aprobadas el 2026-09-26). La sección final
+Estado: refleja el código tras **FASES 1-4** (aprobadas el 2026-09-26). La sección final
 "Planificado" documenta lo que el plan define para fases futuras y que **no existe todavía** en el
 código.
 
@@ -16,7 +16,7 @@ graph TD
     feature["feature/&lt;pantalla&gt;<br/>Compose + ViewModel + StateFlow"] --> domain
     domain["domain<br/>model / repository (interfaces) / usecase / calc"]
     data["data<br/>remote (DTO+datasource) / mapper / repository (impl)"] -->|implementa| domain
-    core["core<br/>network, database, security, datastore, navigation, designsystem, common, config"]
+    core["core<br/>network, database, security, datastore, navigation, designsystem, common, config, notifications, work"]
     data --> core
     feature --> core
 ```
@@ -35,9 +35,11 @@ Ver el detalle completo en [`estructura.md`](estructura.md). Resumen de responsa
 | `core/navigation` | Rutas `@Serializable`, `SpotterNavHost`, `DeepLinkParser`, `TopLevelDestination` |
 | `core/network` | Cliente Supabase, `safeCall`/`ErrorMapper`, `NetworkMonitor` |
 | `core/security` | Cifrado Tink + Android Keystore de sesión y code verifier |
+| `core/notifications` | Canal `rest_timer`, alarma de fin de descanso (`RestTimerAlarmScheduler`) y `RestTimerReceiver` |
+| `core/work` | `SyncWorkoutsWorker` + `SyncScheduler` (WorkManager) para subir el outbox |
 | `domain/model` | Modelos puros de negocio (sin Android, sin DTOs) |
 | `domain/repository` | Interfaces de repositorio (12) |
-| `domain/usecase` | Un único use case implementado hasta ahora: `AdoptTemplateUseCase` |
+| `domain/usecase` | `AdoptTemplateUseCase` (FASE 3) y los 6 use cases del entrenamiento activo y la sincronización (FASE 4) |
 | `domain/calc` | Cálculos puros testeables (peso, edad, semana, orden, etc.) |
 | `data/remote` | DTOs `@Serializable` + data sources `Supabase*RemoteDataSource` |
 | `data/mapper` | DTO/Entity ↔ dominio |
@@ -50,10 +52,11 @@ Todos los módulos son `@InstallIn(SingletonComponent::class)`. No se usa `kapt`
 prohíbe con el Kotlin integrado), solo KSP. Módulos presentes: `CommonModule`, `ConfigModule`,
 `SecurityModule`, `NetworkModule`, `SupabaseModule` (cliente Supabase, `Json`, `Auth`/`Postgrest`/
 `Functions`), `DatabaseModule` (Room), `DataStoreModule` (los dos `DataStore` nombrados con
-`@Named`), `DataSourceModule` (bindings de los `*RemoteDataSource`) y `RepositoryModule` (bindings
-de los 12 repositorios). `SpotterApp` es `@HiltAndroidApp` y además `Configuration.Provider`
-(inyecta `HiltWorkerFactory` para WorkManager, aunque **ningún `Worker` existe todavía**: es
-preparación para la FASE 4) y `SingletonImageLoader.Factory` (Coil, con decoder de GIF animado).
+`@Named`), `DataSourceModule` (bindings de los `*RemoteDataSource`), `RepositoryModule` (bindings
+de los 12 repositorios), `NotificationsModule` (`RestTimerAlarmScheduler`) y `WorkModule`
+(`SyncScheduler`). `SpotterApp` es `@HiltAndroidApp` y además `Configuration.Provider` (inyecta
+`HiltWorkerFactory`, que construye el `@HiltWorker` `SyncWorkoutsWorker`) y
+`SingletonImageLoader.Factory` (Coil, con decoder de GIF animado).
 
 ## Flujo de datos: cache-then-network
 
@@ -84,10 +87,48 @@ Historial, progreso, plantillas y perfil (`WorkoutHistoryRepository`, `ProgressR
 no tienen caché local (ver `MIGRATION_PLAN.md` ADR A3).
 
 El entrenamiento activo (`ActiveWorkoutRepository`) y el outbox de sincronización
-(`PendingWorkoutRepository`) tienen su propio esquema Room relacional (no JSON), pensado para ser
-la fuente de verdad mientras se entrena — ver "Room" más abajo. Su consumo desde una pantalla real
-(`WorkoutScreen`, `SyncWorkoutsWorker`) es trabajo de FASE 4 y **no existe todavía**; hoy solo están
-el modelo de dominio, el DAO, la entidad y el repositorio con sus tests.
+(`PendingWorkoutRepository`) tienen su propio esquema Room relacional (no JSON), que es la fuente
+de verdad mientras se entrena — ver "Room" más abajo y la sección siguiente.
+
+## Entrenamiento activo, descanso y sincronización offline (FASE 4)
+
+```mermaid
+sequenceDiagram
+    participant RD as RoutineDetailScreen/VM
+    participant Start as StartWorkoutUseCase
+    participant Room as ActiveWorkoutDao (Room)
+    participant W as WorkoutScreen/VM
+    participant Alarm as RestTimerAlarmScheduler
+    participant Fin as FinishWorkoutUseCase
+    participant Sync as SyncWorkoutsWorker
+
+    RD->>Start: invoke(userId, routineId, day, replaceExisting)
+    Start->>Room: startIfAbsent / replaceActive
+    Start-->>RD: Started | ActiveWorkoutExists (diálogo Continuar/Descartar)
+    RD->>W: navigateToWorkout() (launchSingleTop)
+    W->>Room: observeActive (estado restaurable tras muerte del proceso)
+    W->>Room: UpdateSetInput (debounce 300 ms) / ToggleSetCompletion
+    W->>Alarm: schedule(rest.endsAt) al completar una serie
+    W->>Fin: Finalizar
+    Fin->>Room: moveToOutbox (una transacción)
+    Fin->>Alarm: cancel()
+    Fin->>Sync: SyncScheduler.schedule() (red requerida, backoff exponencial)
+    Sync->>Sync: SyncPendingWorkoutsUseCase → upsert idempotente
+```
+
+- **Room como única fuente de verdad**: `WorkoutViewModel` observa la sesión activa; los textos
+  en edición viven como borradores en memoria y se persisten con `debounce(300)` y flush inmediato
+  al completar, cambiar de ejercicio o en `onCleared`. Matar el proceso no pierde el
+  entrenamiento ni el descanso (`RestTimer.endsAt` es un instante absoluto).
+- **Descanso en background**: al completar una serie se agenda una alarma exacta (o inexacta si no
+  hay permiso de alarmas exactas). `RestTimerReceiver` no notifica si la app está en primer plano
+  (ahí suena el beep in-app); si no, muestra "Descanso terminado" y el tap abre `MainActivity` con
+  `open_workout=true` → `RootViewModel.pendingOpenWorkout` → `SpotterRoot` navega a `WorkoutRoute`.
+- **Outbox**: `FinishWorkoutUseCase` convierte a kg y mueve la sesión al outbox en una sola
+  transacción; `SyncWorkoutsWorker` (trabajo único `sync_workouts`) sube las filas del usuario
+  actual, reintenta errores transitorios y marca `FAILED` los permanentes. `RootViewModel` también
+  agenda la sincronización al iniciar sesión (no solo en la transición offline→online, bug #3 de
+  RN). `WorkoutScreen` muestra un banner "Sin conexión" según `NetworkMonitor`.
 
 ## Autenticación y sesión
 
@@ -119,9 +160,10 @@ sequenceDiagram
 (`Loading`/`ConfigError`/`SignedOut`/`SignedIn(needsOnboarding)`). `SpotterRoot` renderiza
 `LoginScreen`, `ConfigErrorScreen` o el `NavHost` autenticado según ese estado. Al pasar a
 `SignedIn` por primera vez en la sesión del proceso, sincroniza el `display_name` del perfil
-(`syncProfileDisplayName`). El cierre de sesión (`ProfileViewModel.onSignOutConfirmed` →
-`AuthRepository.signOut()`) no tiene todavía un `SignOutUseCase` que limpie Room/DataStore/alarmas:
-eso es trabajo de una fase posterior (ver "Planificado").
+(`syncProfileDisplayName`) y agenda la sincronización del outbox. El cierre de sesión
+(`ProfileViewModel.onSignOutConfirmed`) cancela la alarma de descanso y el worker de sincronización
+y llama `AuthRepository.signOut()`; todavía no hay un `SignOutUseCase` que limpie Room/DataStore
+(FASE 5, ver "Planificado").
 
 `MainActivity` valida `AppConfig.isValid` antes de tocar el `SupabaseClient` (inyectado como
 `Lazy<SupabaseClient>` para no construirlo si la config es inválida) y muestra
@@ -150,6 +192,11 @@ eso es trabajo de una fase posterior (ver "Planificado").
     sigue consumiendo aunque la pantalla esté en background, así que envolver el *callback* (en
     vez de la *colección*) con `dropUnlessResumed` descartaba el evento para siempre. Esto fue un
     bug bloqueante encontrado y corregido en el ciclo 4 de revisión de FASE 3.
+  - Mismo criterio en FASE 4: `RoutineDetailScreen.onOpenWorkout` lo dispara el evento
+    `WorkoutStarted`, así que va **sin** `dropUnlessResumed` (`ObserveAsEvents` puede entregar el
+    evento en `STARTED`, antes de `ON_RESUME`, y el guard lo descartaría). La doble navegación la
+    evita `NavController.navigateToWorkout()` con `launchSingleTop`, que también usan el banner de
+    `RoutinesScreen` y la notificación de descanso.
 - Resultados de navegación "de vuelta" (rutina creada desde plantilla, ejercicio agregado) se
   relayan vía `NavBackStackEntry.savedStateHandle`, leídos con `getStateFlow(...)` envuelto en
   `remember(entry)` para no cancelar un snackbar en curso en una recomposición.
@@ -233,9 +280,11 @@ delega la política de reintento en `KeysetRecoveryPolicy`:
 - `Logger` (`AndroidLogger`) es no-op fuera de `BuildConfig.DEBUG`; nunca loguea URLs, tokens ni PII.
 - Deep links validados por `DeepLinkParser`; la importación por código exige confirmación
   explícita del usuario (pantalla real: FASE 6, ver "Planificado").
-- Permisos declarados pero **aún sin código que los use**: `POST_NOTIFICATIONS` y
-  `SCHEDULE_EXACT_ALARM` (para el temporizador de descanso, FASE 4); `androidx.work` está en el
-  classpath y `SpotterApp` ya provee `HiltWorkerFactory`, pero no existe ningún `Worker` todavía.
+- `POST_NOTIFICATIONS` se pide en runtime (API 33+) la primera vez que se inicia un
+  entrenamiento; si se deniega, el entrenamiento sigue sin notificación.
+  `SCHEDULE_EXACT_ALARM` se usa solo si `canScheduleExactAlarms()`; si no, la alarma cae a
+  `setAndAllowWhileIdle`. `RestTimerReceiver` no está exportado y los `PendingIntent` usan
+  `FLAG_IMMUTABLE`.
 
 ### Backend (Supabase)
 
@@ -250,13 +299,13 @@ no aplicada. Esquema en vivo documentado en
 ## Decisiones de arquitectura (ADR)
 
 Registro completo con la justificación de cada una en `MIGRATION_PLAN.md` §3 (A1-A12). Estado de
-cada una a fines de FASE 3:
+cada una a fines de FASE 4:
 
 | ADR | Decisión | Estado |
 |---|---|---|
 | A1 | Módulo único `:app`, paquetes `core/domain/data/feature` | Vigente |
 | A2 | Capas de la Architecture Guide; UDF con `StateFlow` + `Channel` | Vigente |
-| A3 | Offline-first: Room activo/outbox + caché JSON | Room y repos listos; el consumo por una pantalla de entrenamiento es FASE 4 |
+| A3 | Offline-first: Room activo/outbox + caché JSON | Vigente: `WorkoutScreen` sobre Room + outbox sincronizado por WorkManager |
 | A4 | Hilt + KSP (no kapt) | Vigente |
 | A5 | Navigation Compose 2.9.8, rutas `@Serializable`, deep links fuera de `navDeepLink` | Vigente |
 | A6 | supabase-kt 3.8.0 (Auth/Postgrest/Functions) + Ktor OkHttp | Vigente |
@@ -265,21 +314,18 @@ cada una a fines de FASE 3:
 | A9 | `AppResult`/`AppError` + `safeCall` | Vigente |
 | A10 | Gráfico propio en `Canvas` + `sh.calvin.reorderable` para drag & drop | El reordenamiento de ejercicios por día ya se usa en `RoutineDetailScreen`; el gráfico de progreso es FASE 5 |
 | A11 | Exportación nativa (PDF + JPEG de "historia") | No implementado (FASE 6) |
-| A12 | Peso siempre en kg, conversión solo de presentación | Modelo (`WeightUnit`) y `PreferencesRepository` existen; sin UI de conversión todavía (FASE 5) |
+| A12 | Peso siempre en kg, conversión solo de presentación | `FinishWorkoutUseCase` convierte a kg al guardar; la unidad queda fija por sesión; falta la UI de preferencia kg/lb (FASE 5) |
 
-## Planificado (no implementado — fases 4 a 7)
+## Planificado (no implementado — fases 5 a 7)
 
 Documentado acá solo para dejar explícito qué falta; **nada de lo siguiente existe en el código
 hoy**. Ver `MIGRATION_PLAN.md` §10 para el detalle por fase.
 
-- **FASE 4:** pantalla de entrenamiento activo real (hoy `WorkoutRoute` muestra `ComingSoonScreen`),
-  `StartWorkoutUseCase`/`FinishWorkoutUseCase`/`ToggleSetCompletionUseCase`/`DiscardWorkoutUseCase`,
-  temporizador de descanso persistido con alarma (`RestTimerAlarmScheduler`/`RestTimerReceiver` en
-  un futuro `core/notifications/`), worker de sincronización del outbox
-  (`SyncWorkoutsWorker`/`SyncScheduler` en un futuro `core/work/`).
 - **FASE 5:** Dashboard real, historial (lista y detalle de sesión), progreso (PRs, gráfico),
   perfil completo (datos físicos, estadísticas, preferencia kg/lb), `SignOutUseCase` que limpie
-  Room/DataStore/alarmas al cerrar sesión.
+  Room/DataStore al cerrar sesión (y cancele alarma y sync por sí mismo). Decidir si el banner
+  "Entrenamiento en curso" se muda de `RoutinesScreen` al dashboard y si al finalizar un
+  entrenamiento se navega al dashboard con snackbar.
 - **FASE 6:** compartir/importar rutina por código, importación con IA desde imagen, exportación de
   entrenamientos (PDF + imagen "historia").
 - **FASE 7:** endurecimiento de release y verificación en dispositivo/emulador real.

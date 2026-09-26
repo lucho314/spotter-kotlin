@@ -9,6 +9,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.dropUnlessResumed
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -49,18 +50,28 @@ private fun <A, B> LifecycleOwner.dropUnlessResumed2(action: (A, B) -> Unit): (A
 }
 
 /**
- * Single `NavHost` for the authenticated app. Only top-level destinations plus routines/templates/
- * exercise detail (phase 3) are wired up; workout, history/progress detail, import and the AI
- * import flow are still placeholders until their feature phase lands (see MIGRATION_PLAN.md
- * section 10).
+ * Opens the active workout. `launchSingleTop`: there is only ever one active workout, so a second
+ * `WorkoutRoute` on top of an existing one is always a bug - e.g. tapping the "Descanso terminado"
+ * notification while `WorkoutScreen` is already the current destination, or an unguarded
+ * event-driven call (see `RoutineDetailScreen`'s `onOpenWorkout`) racing a user click.
+ */
+fun NavController.navigateToWorkout() {
+    navigate(WorkoutRoute) { launchSingleTop = true }
+}
+
+/**
+ * Single `NavHost` for the authenticated app. Top-level destinations, routines/templates/exercise
+ * detail (phase 3) and the active workout (phase 4) are wired up; dashboard, history, progress,
+ * import and the AI import flow are still placeholders until their feature phase lands (see
+ * MIGRATION_PLAN.md section 10).
  *
  * Two different kinds of callback are wired up here, deliberately guarded differently:
  * - **User clicks** (`onBack`, `onRoutineClick`, etc.): guarded with [dropUnlessResumed] (no-arg)
  *   or [dropUnlessResumed1]/[dropUnlessResumed2] (parameterized), so a double-tap or a tap racing
  *   a back gesture can't fire `navigate()` twice.
  * - **Async-operation results** (`onSaved`, `onArchived`, `onExerciseAdded`, `onRoutinesCreated`,
- *   Onboarding's `onDone`): driven by a ViewModel event that can legitimately arrive while this
- *   screen is backgrounded (mid network call). These are **not** guarded here - see
+ *   `RoutineDetailScreen`'s `onOpenWorkout`, Onboarding's `onDone`): driven by a ViewModel event
+ *   that can legitimately arrive while this screen is backgrounded (mid network call). These are **not** guarded here - see
  *   `com.lucho314.spotter.feature.common.ObserveAsEvents`'s KDoc: guarding the callback instead of
  *   the event *collection* silently drops the result forever (review bug), since the event has
  *   already been consumed from the channel by the time the guard runs.
@@ -102,7 +113,7 @@ fun SpotterNavHost(
                 onArchivedClick = dropUnlessResumed { navController.navigate(ArchivedRoutinesRoute) },
                 onImportCode = lifecycleOwner.dropUnlessResumed1 { code -> navController.navigate(ImportCodeRoute(code)) },
                 onImportImageClick = dropUnlessResumed { navController.navigate(ImportImageRoute) },
-                onResumeWorkoutClick = dropUnlessResumed { navController.navigate(WorkoutRoute) },
+                onResumeWorkoutClick = dropUnlessResumed { navController.navigateToWorkout() },
                 justCreatedRoutinesFromTemplate = justCreatedRoutinesFromTemplate,
                 onJustCreatedRoutinesConsumed = { entry.savedStateHandle.remove<Boolean>(KEY_ROUTINES_CREATED_FROM_TEMPLATE) },
             )
@@ -136,7 +147,11 @@ fun SpotterNavHost(
                     navController.navigate(AddExerciseRoute(routineId, dayNumber))
                 },
                 onExerciseClick = lifecycleOwner.dropUnlessResumed1 { exerciseId -> navController.navigate(ExerciseDetailRoute(exerciseId)) },
-                onStartWorkoutClick = dropUnlessResumed { navController.navigate(WorkoutRoute) },
+                // Unguarded: driven by `RoutineDetailEvent.WorkoutStarted`, which ObserveAsEvents
+                // can deliver at STARTED (e.g. returning from background, before ON_RESUME), where
+                // `dropUnlessResumed` would swallow it - the workout would be created in Room but
+                // never opened. `navigateToWorkout()`'s `launchSingleTop` covers double-firing.
+                onOpenWorkout = { navController.navigateToWorkout() },
                 onArchived = { navController.popBackStack() },
                 addedExerciseName = addedExerciseName,
                 onAddedExerciseNameConsumed = { entry.savedStateHandle.remove<String>(KEY_ADDED_EXERCISE_NAME) },

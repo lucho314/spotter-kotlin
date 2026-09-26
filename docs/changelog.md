@@ -6,6 +6,59 @@ ciclo de revisión está en `MIGRATION_PLAN.md` §10 y en `review_carryover.md`.
 
 ---
 
+## [Sin versión] — 2026-09-26 — Fix post-FASE 4: navegación al entrenamiento
+
+- **Bug:** `SpotterNavHost` envolvía `RoutineDetailScreen.onStartWorkoutClick` con
+  `dropUnlessResumed`, pero ese callback lo dispara el evento `WorkoutStarted` (resultado async de
+  `StartWorkoutUseCase`), no un click. `ObserveAsEvents` puede entregar el evento en `STARTED`
+  (p. ej. al volver de background, antes de `ON_RESUME`) y el guard lo descartaba: el
+  entrenamiento quedaba creado en Room pero la pantalla nunca se abría. Es la misma clase de bug
+  que el bloqueante del ciclo 4 de FASE 3, reintroducida en FASE 4.
+- **Fix:** el callback se renombró a `onOpenWorkout` y va sin guard. Nueva extensión
+  `NavController.navigateToWorkout()` (`launchSingleTop = true`) usada por los tres puntos de
+  entrada a `WorkoutRoute` (banner de Rutinas, `onOpenWorkout` y la notificación "Descanso
+  terminado"), lo que también evita apilar una segunda `WorkoutScreen` al tocar la notificación
+  con el entrenamiento ya abierto.
+- Sin tests nuevos: el proyecto no tiene infraestructura de test de UI de Compose/Navigation.
+
+---
+
+## [FASE 4] — 2026-09-26 — APROBADO
+
+Entrenamiento activo, temporizador de descanso y sincronización offline.
+
+- **Inicio:** "Iniciar Entrenamiento" en `RoutineDetailScreen` con selector de día (días con
+  ejercicios, preselección de hoy, "Sin día asignado"), `StartWorkoutUseCase` y diálogo
+  "Continuar / Descartar y empezar / Cancelar" si ya hay un entrenamiento en curso (bug #6 de RN).
+  Pedido de `POST_NOTIFICATIONS` en API 33+.
+- **`WorkoutScreen`/`WorkoutViewModel`:** Room como fuente de verdad (el estado, incluido el
+  descanso, sobrevive a la muerte del proceso); borradores de texto con `debounce(300)` y flush
+  inmediato; timers de sesión y descanso; tabla de series KG/LB + reps; agregar serie; "Último
+  entrenamiento"; beep + háptico al terminar el descanso en primer plano; finalizar (con diálogo si
+  no hay series completadas) y descartar con confirmación; banner "Sin conexión".
+- **Alarma de descanso** (`core/notifications/`): canal `rest_timer`, `RestTimerAlarmScheduler`
+  (exacta si se puede, inexacta si no) y `RestTimerReceiver` que notifica solo con la app en
+  background; el tap abre directo el entrenamiento (bug #10 de RN).
+- **Sincronización** (`core/work/`): `SyncWorkoutsWorker` + `SyncScheduler` (trabajo único, red
+  requerida, backoff exponencial); `SyncPendingWorkoutsUseCase` sube solo filas del usuario actual,
+  reintenta errores transitorios y marca `FAILED` los permanentes; `RootViewModel` agenda la
+  sincronización al iniciar sesión (bug #3 de RN).
+- **Use cases:** `StartWorkoutUseCase`, `UpdateSetInputUseCase`, `ToggleSetCompletionUseCase`,
+  `FinishWorkoutUseCase`, `DiscardWorkoutUseCase`, `SyncPendingWorkoutsUseCase`; regla compartida
+  `domain/calc/ActiveSetWeight`.
+- **Cierre de sesión:** `ProfileViewModel.onSignOutConfirmed()` cancela alarma y worker antes de
+  `signOut()` (la limpieza completa de Room es FASE 5).
+
+**Desviaciones registradas** (detalle en `MIGRATION_PLAN.md` §10): el banner "Entrenamiento en
+curso" vive en `RoutinesScreen` (no hay dashboard todavía); finalizar/descartar vuelve atrás con
+snackbar propio en vez de navegar al dashboard.
+
+**Carry-over resuelto en esta fase:** chequeo de dueño en `ActiveWorkoutDao.replaceActive`;
+`RoutineOrdering.unassignedBucketDayNumber` reutiliza el `dayNumber` compartido; `LoginScreen` y
+Onboarding migrados a `ObserveAsEvents`.
+
+---
+
 ## [FASE 3] — 2026-09-26 — APROBADO (ciclo de revisión 4)
 
 UI de rutinas, plantillas, catálogo de ejercicios y detalle de ejercicio.
@@ -124,10 +177,9 @@ sin depender de esa corrección. Detalle completo de los hallazgos B1-B6 en `MIG
 
 ---
 
-## Planificado (fases 4 a 7, no iniciadas)
+## Planificado (fases 5 a 7, no iniciadas)
 
 Ver `MIGRATION_PLAN.md` §10 y la sección "Planificado" de `arquitectura.md`/`componentes.md` para
-el detalle. Resumen: entrenamiento activo + temporizador de descanso + sincronización en segundo
-plano (FASE 4); historial, progreso, dashboard, perfil completo (FASE 5); compartir/importar
+el detalle. Resumen: historial, progreso, dashboard, perfil completo (FASE 5); compartir/importar
 rutinas (código e IA) y exportación de entrenamientos (FASE 6); endurecimiento de release y
 verificación en dispositivo real (FASE 7).

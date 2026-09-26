@@ -1,14 +1,15 @@
 # Estructura del proyecto
 
 Árbol verificado contra `app/src/main/java/com/lucho314/spotter/` y `app/src/test/java/com/lucho314/spotter/`
-tras FASES 1-3. Un solo módulo Gradle `:app`. Los paquetes/archivos marcados **(planificado)** no
+tras FASES 1-4. Un solo módulo Gradle `:app`. Los paquetes/archivos marcados **(planificado)** no
 existen todavía — ver `docs/arquitectura.md` sección "Planificado".
 
 ## Raíz
 
 ```
-MainActivity.kt      @AndroidEntryPoint; splash screen; procesa deep links (auth/import) en onCreate/onNewIntent
-SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory, sin Workers aún);
+MainActivity.kt      @AndroidEntryPoint; splash screen; procesa deep links (auth/import) y el extra
+                      open_workout de la notificación de descanso en onCreate/onNewIntent
+SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory para SyncWorkoutsWorker);
                       SingletonImageLoader.Factory (Coil, decoder de GIF animado)
 ```
 
@@ -25,8 +26,8 @@ SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory
 | `core/navigation/` | `DeepLink.kt` (`DeepLink`, `DeepLinkParser`), `RouteArgs.kt`, `Routes.kt`, `SpotterNavHost.kt`, `TopLevelDestination.kt` | Rutas type-safe, `NavHost` único, parsing de deep links |
 | `core/network/` | `NetworkModule.kt`, `NetworkMonitor.kt`, `SafeCall.kt` (`safeCall`, `ErrorMapper`), `SupabaseModule.kt` | Cliente Supabase (Auth/Postgrest/Functions), mapeo de excepciones a `AppError`, monitor de conectividad |
 | `core/security/` | `AeadProvider.kt` (`TinkAeadProvider`), `EncryptedCodeVerifierCache.kt`, `EncryptedSessionManager.kt`, `KeysetRecoveryPolicy.kt`, `SecurityModule.kt` | Cifrado de sesión/PKCE con Tink + Android Keystore |
-| `core/notifications/` **(planificado)** | — | Canales de notificación y alarma del temporizador de descanso (FASE 4) |
-| `core/work/` **(planificado)** | — | `SyncWorkoutsWorker`/`SyncScheduler` (FASE 4) |
+| `core/notifications/` | `NotificationChannels.kt`, `NotificationsModule.kt`, `RestTimerAlarmScheduler.kt` (`AndroidRestTimerAlarmScheduler`), `RestTimerReceiver.kt` (`EXTRA_OPEN_WORKOUT`) | Canal `rest_timer` y alarma del temporizador de descanso (FASE 4) |
+| `core/work/` | `SyncScheduler.kt` (`WorkManagerSyncScheduler`), `SyncWorkoutsWorker.kt`, `WorkModule.kt` | Sincronización del outbox con WorkManager (FASE 4) |
 
 ## `domain/` — lógica de negocio pura (sin Android, sin Hilt salvo `@Inject` en use cases)
 
@@ -34,8 +35,8 @@ SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory
 |---|---|---|
 | `domain/model/` | `ActiveWorkoutModels.kt`, `AuthModels.kt`, `DashboardModels.kt` (`DashboardStats`, sin consumidores aún), `ExerciseModels.kt`, `PendingWorkoutModels.kt`, `ProfileModels.kt`, `ProgressModels.kt`, `RoutineModels.kt`, `ShareCode.kt`, `SharingModels.kt`, `TemplateModels.kt`, `WeightUnit.kt`, `WorkoutModels.kt` | Data classes / enums / sealed interfaces del dominio |
 | `domain/repository/` | 12 interfaces (ver `componentes.md`) | Contratos que implementa `data/repository` |
-| `domain/usecase/` | `AdoptTemplateUseCase.kt` | Único use case implementado hasta FASE 3; el resto de los use cases del plan se difieren a las fases que los necesitan |
-| `domain/calc/` | `AgeCalculator.kt`, `ExerciseProgressAggregator.kt`, `NumberFormatter.kt`, `RoutineOrdering.kt`, `SpanishWeekdays.kt`, `Validators.kt`, `WeekRange.kt`, `WeightConverter.kt`, `WeightInputParser.kt`, `WorkoutMath.kt` | Cálculos puros, 100% cubiertos por tests unitarios |
+| `domain/usecase/` | `AdoptTemplateUseCase.kt` (FASE 3); `StartWorkoutUseCase.kt`, `UpdateSetInputUseCase.kt`, `ToggleSetCompletionUseCase.kt`, `FinishWorkoutUseCase.kt`, `DiscardWorkoutUseCase.kt`, `SyncPendingWorkoutsUseCase.kt` (FASE 4) | Los use cases de fases 5-6 se difieren a las fases que los necesitan |
+| `domain/calc/` | `ActiveSetWeight.kt`, `AgeCalculator.kt`, `ExerciseProgressAggregator.kt`, `NumberFormatter.kt`, `RoutineOrdering.kt`, `SpanishWeekdays.kt`, `Validators.kt`, `WeekRange.kt`, `WeightConverter.kt`, `WeightInputParser.kt`, `WorkoutMath.kt` | Cálculos puros, 100% cubiertos por tests unitarios |
 
 ## `data/` — implementación de datos
 
@@ -55,7 +56,7 @@ feature/
 ├── auth/                    LoginScreen/ViewModel, OnboardingScreen/ViewModel, GoogleCredentialClient, NonceGenerator
 ├── root/                    SpotterRoot, RootViewModel (guardia de sesión + deep link pendiente), ConfigErrorScreen
 ├── common/                  ObserveAsEvents, ErrorMessages, ValidationMessages, RoutineExerciseSummary, ComingSoonScreen (placeholder)
-├── profile/                 ProfileScreen/ViewModel — solo identidad + cerrar sesión (datos físicos: fase 5)
+├── profile/                 ProfileScreen/ViewModel — identidad + cerrar sesión (cancela alarma y sync; datos físicos: fase 5)
 ├── exercise/                ExerciseDetailScreen/ViewModel, ExerciseLabels
 ├── routines/
 │   ├── list/                RoutinesScreen/ViewModel, ArchivedRoutinesScreen/ViewModel
@@ -64,7 +65,7 @@ feature/
 │   └── addexercise/          AddExerciseScreen/ViewModel
 ├── templates/                TemplateLabels, list/TemplatesScreen/ViewModel, detail/TemplateDetailScreen/ViewModel
 ├── dashboard/    (planificado)
-├── workout/      (planificado — WorkoutRoute hoy renderiza ComingSoonScreen)
+├── workout/                 WorkoutScreen/ViewModel (entrenamiento activo, timers, series, último entrenamiento)
 ├── history/      (planificado — HistoryRoute hoy renderiza ComingSoonScreen)
 ├── progress/     (planificado — ProgressRoute hoy renderiza ComingSoonScreen)
 └── importroutine/(planificado — ImportCodeRoute/ImportImageRoute hoy renderizan ComingSoonScreen)
@@ -86,7 +87,12 @@ compartidos (`FakeAead`, `FakeAuthDataSource`, `FakeAuthRepository`, `FakeExerci
 `FakeTemplateRepository`, `FakeTimeProvider`, `FakeWorkoutRemoteDataSource`, `FakeAiImportRemoteDataSource`,
 `CountingLazy`, `MainDispatcherRule`). Los tests de Room (`ActiveWorkoutDaoTest`,
 `CachedPayloadDaoTest`, `PendingWorkoutDaoTest`) corren con Robolectric sobre una base en memoria.
-**308 `@Test`** en la última corrida en verde (`./gradlew testDebugUnitTest`).
+**355 `@Test`** en el código tras FASE 4 (conteo de anotaciones; la corrida anterior en verde,
+tras FASE 3, tenía 308). Tests de FASE 4: `StartWorkoutUseCaseTest`,
+`ToggleSetCompletionUseCaseTest`, `FinishWorkoutUseCaseTest`, `SyncPendingWorkoutsUseCaseTest`,
+`SyncWorkoutsWorkerTest` (Robolectric), `WorkoutViewModelTest`, `RestTimerTest`, más casos nuevos en
+`ActiveWorkoutDaoTest`, `ActiveWorkoutRepositoryImplTest`, `RoutineDetailViewModelTest` y
+`ProfileViewModelTest`.
 
 ## Documentación (`docs/`)
 

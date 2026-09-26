@@ -1,6 +1,6 @@
 # Componentes principales
 
-Clases e interfaces reales del código tras FASES 1-3, agrupadas por capa. Cada identificador
+Clases e interfaces reales del código tras FASES 1-4, agrupadas por capa. Cada identificador
 listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado). La sección final
 "Planificado" lista los nombres que el plan define para fases futuras y que **no existen todavía**.
 
@@ -76,8 +76,12 @@ listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado). 
   `ProfileRoute`).
 - **`SpotterNavHost`**: único `NavHost`; wired hoy: `Onboarding`, `Dashboard` (placeholder),
   `Routines`, `ArchivedRoutines`, `RoutineEdit`, `RoutineDetail`, `AddExercise`, `Templates`,
-  `TemplateDetail`, `ExerciseDetail`, `Profile`; `History`/`Progress`/`Workout`/`ImportCode`/
+  `TemplateDetail`, `ExerciseDetail`, `Profile`, `Workout`; `History`/`Progress`/`ImportCode`/
   `ImportImage` renderizan `ComingSoonScreen`.
+- **`NavController.navigateToWorkout()`** (en `SpotterNavHost.kt`): única forma de abrir
+  `WorkoutRoute`, siempre con `launchSingleTop = true` (nunca dos `WorkoutScreen` apiladas). La
+  usan el banner "Entrenamiento en curso", `RoutineDetailScreen.onOpenWorkout` y la notificación
+  "Descanso terminado" (vía `SpotterRoot`).
 - **`DeepLink`** (`AuthCallback`, `ImportRoutine(code)`) + **`DeepLinkParser.parse(raw): DeepLink?`**.
 - **`RouteArgs`**: claves de argumento compartidas entre las rutas y los ViewModels que leen
   `SavedStateHandle` directamente.
@@ -118,10 +122,29 @@ lanzan, reflejan el estado del caché local.
 
 ## `domain/usecase`
 
-- **`AdoptTemplateUseCase`**: único use case implementado. `invoke(userId, template): AppResult<List<String>>`
+- **`AdoptTemplateUseCase`** (FASE 3): `invoke(userId, template): AppResult<List<String>>`
   crea una `Routine` por día de la plantilla (vía `RoutineRepository`), con **compensación**: si
   falla cualquier paso (incluida la cancelación de la corrutina, manejada con `NonCancellable`),
   borra las rutinas ya creadas antes de propagar el error/cancelación.
+- **`StartWorkoutUseCase`** (FASE 4): arma la instantánea del entrenamiento a partir de la rutina y
+  un `DaySelection` (`Day(n)`/`Unassigned`/`All`); devuelve `StartResult.Started(sessionId)` o
+  `StartResult.ActiveWorkoutExists(existing)`. Con `replaceExisting = true` reemplaza la sesión
+  activa usando exactamente el id que reportó `AlreadyActive`. Sin ejercicios →
+  `ValidationReason.NO_EXERCISES`.
+- **`UpdateSetInputUseCase`**: persiste los textos de peso/reps de una serie (el ViewModel los
+  debounce-a).
+- **`ToggleSetCompletionUseCase`**: valida peso/reps (coma decimal, peso vacío = 0 solo en
+  `BODYWEIGHT`, vía `ActiveSetWeight`) antes de completar; al completar arranca el `RestTimer` y
+  agenda la alarma; descompletar no valida.
+- **`FinishWorkoutUseCase`**: `invoke(userId, sessionId): AppResult<FinishResult>` (`Saved` /
+  `NothingToSave`); convierte a kg solo las series completadas, mueve la sesión al outbox
+  (`moveToOutbox`, atómico), cancela la alarma y agenda la sincronización.
+- **`DiscardWorkoutUseCase`**: borra la sesión activa y cancela la alarma.
+- **`SyncPendingWorkoutsUseCase`**: sube las filas `PENDING` del usuario actual (filas de otro
+  usuario no se tocan); `SyncOutcome.Done` / `RetryLater` / `NoUser`. Errores transitorios (red,
+  `Unauthorized`, `Server` 5xx o sin código) → `recordAttempt` y `RetryLater`; el resto (p. ej. un
+  42501 de RLS, conflicto) → `markFailed` (`FAILED`). `lastError` guarda un código corto sin PII.
+  Subir dos veces es seguro (upsert idempotente por `id`).
 
 ## `domain/calc` — cálculos puros (100% testeados)
 
@@ -129,7 +152,8 @@ lanzan, reflejan el estado del caché local.
 `WeekRange` (semana lunes-domingo en zona local), `AgeCalculator` (`Period.between`),
 `RoutineOrdering` (orden por día, `nextSortOrder`, `suggestedFirstDayNumber`,
 `unassignedBucketDayNumber`), `SpanishWeekdays`, `ExerciseProgressAggregator`, `NumberFormatter`,
-`Validators`.
+`Validators`, `ActiveSetWeight` (FASE 4: regla única "peso vacío inválido salvo en `BODYWEIGHT`",
+compartida por `ToggleSetCompletionUseCase` y `FinishWorkoutUseCase`).
 
 ## `data/remote` y `data/mapper`
 
@@ -153,6 +177,8 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
 - **`ActiveWorkoutRepositoryImpl`**: sobre `ActiveWorkoutDao`; en `start()`, si una
   `SQLiteConstraintException` deja la re-consulta en `null`, relanza (no devuelve `Started`
   silenciosamente) — fix de un carry-over de revisión de FASE 2, resuelto en FASE 3.
+  `replace(existingSessionId, ...)` verifica en la transacción del DAO que la sesión a reemplazar
+  sea del mismo usuario (FASE 4).
 - **`PendingWorkoutRepositoryImpl`**: sobre `PendingWorkoutDao`; `upload()` hace upsert idempotente
   contra Supabase.
 - El resto (`AuthRepositoryImpl`, `PreferencesRepositoryImpl`, `TemplateRepositoryImpl`,
@@ -164,10 +190,13 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
 
 - **`RootViewModel`**: `uiState: StateFlow<RootUiState>` (`Loading`/`ConfigError`/`SignedOut`/
   `SignedIn(needsOnboarding)`), `pendingImportCode: StateFlow<ShareCode?>`, `onDeepLink(link)`,
-  `consumeDeepLink()`. Sincroniza el `display_name` una vez por sesión de proceso al pasar a
-  `SignedIn`.
+  `consumeDeepLink()`, `pendingOpenWorkout: StateFlow<Boolean>` (`onOpenWorkoutRequested()` /
+  `consumeOpenWorkout()`, alimentado por el extra `open_workout` de la notificación). Una vez por
+  sesión de proceso al pasar a `SignedIn`: sincroniza el `display_name` y llama
+  `SyncScheduler.schedule()`.
 - **`SpotterRoot`**: composable raíz; decide `LoginScreen`/`ConfigErrorScreen`/`NavHost` según
-  `RootUiState`; maneja la navegación al deep link de importación pendiente.
+  `RootUiState`; maneja la navegación al deep link de importación pendiente y a `WorkoutRoute`
+  cuando se toca la notificación de descanso.
 - **`ConfigErrorScreen`**: pantalla mostrada si `AppConfig.isValid == false`.
 
 ## `feature/auth`
@@ -181,15 +210,16 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
 ## `feature/profile`
 
 - **`ProfileViewModel`**: `ProfileUiState(displayName, email, signingOut, errorMessageRes)`;
-  `onSignOutConfirmed()` llama `AuthRepository.signOut()` directamente (sin `SignOutUseCase` — no
-  limpia Room/DataStore/alarmas todavía, ver "Planificado"). **`ProfileScreen`**: identidad +
+  `onSignOutConfirmed()` cancela la alarma de descanso y el worker de sincronización y luego llama
+  `AuthRepository.signOut()` (sin `SignOutUseCase` — no limpia Room/DataStore todavía, FASE 5). **`ProfileScreen`**: identidad +
   botón "Cerrar sesión" con `ConfirmDialog`.
 
 ## `feature/routines`
 
 - **`list/RoutinesViewModel`** (`RoutinesUiState`, `RoutinesEvent`) / **`RoutinesScreen`**: lista
   ordenada por día, importar por código, accesos a plantillas/archivadas/IA, archivar con
-  confirmación, pull-to-refresh.
+  confirmación, pull-to-refresh. Desde FASE 4 muestra `ActiveWorkoutBanner` ("Entrenamiento en
+  curso · Continuar") si `activeWorkoutRoutineName != null` (provisorio hasta el dashboard real).
 - **`list/ArchivedRoutinesViewModel`** (`ArchivedRoutinesUiState`, `ArchivedRoutinesEvent`) /
   **`ArchivedRoutinesScreen`**: restaurar rutinas archivadas.
 - **`edit/RoutineEditViewModel`** (`RoutineEditUiState`, `RoutineEditEvent`) /
@@ -197,7 +227,10 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
 - **`detail/RoutineDetailViewModel`** (`RoutineDayGroup`, `RoutineDetailUiState`,
   `RoutineDetailEvent`) / **`RoutineDetailScreen`**: agrupación por día (incluye "sin día
   asignado"), reordenar con `sh.calvin.reorderable`, mover ejercicio de día, editar/quitar
-  ejercicio, agregar/renombrar/borrar día.
+  ejercicio, agregar/renombrar/borrar día. FASE 4: "Iniciar Entrenamiento" con selector de día,
+  diálogo "Continuar / Descartar y empezar / Cancelar" ante `WorkoutAlreadyActive`, pedido de
+  `POST_NOTIFICATIONS` en API 33+, y `onOpenWorkout` (sin guard `dropUnlessResumed`: lo dispara el
+  evento `WorkoutStarted`).
 - **`addexercise/AddExerciseViewModel`** (`AddExerciseItem`, `ConfiguringExercise`,
   `AddExerciseUiState`, `AddExerciseEvent`) / **`AddExerciseScreen`**: catálogo con búsqueda y
   filtro por grupo muscular, `NumberStepper` de sets/reps/descanso.
@@ -218,6 +251,22 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   animado o imagen estática (Coil), con placeholder si no hay media.
 - **`ExerciseLabels`**: mapeo de `Equipment`/`Difficulty`/`ExerciseCategory` a español.
 
+## `feature/workout` (FASE 4)
+
+- **`WorkoutViewModel`** (`WorkoutUiState`, `InputDraft`, `LastSessionUiState`, `WorkoutEvent`):
+  observa `ActiveWorkoutRepository.observeActive(userId)` (Room es la fuente de verdad, así que el
+  estado sobrevive a la muerte del proceso); borradores de texto por serie superpuestos al estado
+  de Room, persistidos con `debounce(300)` y flush inmediato al completar/cambiar de ejercicio y en
+  `onCleared`; ticker de 1 s para sesión y descanso. Acciones: `onWeightChange`, `onRepsChange`,
+  `onToggleSet`, `onAddSet`, `onSelectExercise`, `onSkipRest`, `onFinish`, `onDiscard`,
+  `onShowLastSession`/`onDismissLastSession`. Eventos: `RestFinished` (beep `R.raw.beep` +
+  háptico), `ActionFailed`, `Finished(online)`, `Discarded`, `NoActiveWorkout`.
+- **`WorkoutScreen`**: pantalla completa sin barra inferior; header con timer y "Finalizar",
+  puntos de ejercicios, `ExerciseMedia`, tarjeta de descanso con "Saltar", tabla de series
+  (KG/LB, reps, check), "Agregar serie", "Último entrenamiento" en hoja inferior, banner
+  "Sin conexión — los entrenamientos se guardan localmente", `BackHandler` que confirma el
+  descarte.
+
 ## `feature/common`
 
 - **`ObserveAsEvents(flow, onEvent)`**: colector de eventos one-shot lifecycle-aware
@@ -229,21 +278,32 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   plurales reales.
 - **`ComingSoonScreen`**: placeholder para Dashboard/Historial/Progreso/Entrenamiento/Import.
 
+## `core/notifications` y `core/work` (FASE 4)
+
+- **`NotificationChannels`**: canal `rest_timer` (importancia HIGH).
+- **`RestTimerAlarmScheduler`** / **`AndroidRestTimerAlarmScheduler`**: `schedule(endsAt)` con
+  `setExactAndAllowWhileIdle` si `canScheduleExactAlarms()`, si no `setAndAllowWhileIdle`;
+  `cancel()`. `PendingIntent` con `FLAG_IMMUTABLE`.
+- **`RestTimerReceiver`** (no exportado): si la app está en primer plano no hace nada; si no, y
+  hay permiso, notifica "Descanso terminado" con un intent a `MainActivity` con
+  `EXTRA_OPEN_WORKOUT`.
+- **`SyncWorkoutsWorker`** (`@HiltWorker`, `CoroutineWorker`): corre
+  `SyncPendingWorkoutsUseCase`; `Done`/`NoUser` → `success()`, `RetryLater` → `retry()`.
+- **`SyncScheduler`** / **`WorkManagerSyncScheduler`**: `schedule()` encola trabajo único
+  `sync_workouts` (`APPEND_OR_REPLACE`, red requerida, backoff exponencial 30 s); `cancel()`.
+- Bindings en `NotificationsModule` y `WorkModule`.
+
 ## `core/designsystem/component`
 
 `SpotterButton` (variantes `Primary`/`Secondary`/`Ghost`, tamaños `Small`/`Medium`/`Large`),
 `SpotterCard`, `SpotterTextField`, `SpotterChip`, `NumberStepper`, `SectionHeader`, `ConfirmDialog`,
 `LoadingState`, `ErrorState`, `EmptyState`, `ExerciseMedia` (+ función `isVideoUrl`).
 
-## Planificado (no implementado — nombres del plan, fases 4-7)
+## Planificado (no implementado — nombres del plan, fases 5-7)
 
-`StartWorkoutUseCase`, `ToggleSetCompletionUseCase`, `UpdateSetInputUseCase`,
-`FinishWorkoutUseCase`, `DiscardWorkoutUseCase`, `SyncPendingWorkoutsUseCase`,
 `GetDashboardStatsUseCase`, `GetExerciseProgressUseCase`, `GetProfileOverviewUseCase`,
-`UpdateProfileUseCase`, `SignOutUseCase`, `ShareRoutineUseCase`, `ImportSharedRoutineUseCase`,
-`ImportRoutineFromImageUseCase`, `BuildWorkoutExportUseCase` (FASE 4-6);
-`SyncWorkoutsWorker`/`SyncScheduler`, `RestTimerAlarmScheduler`/`RestTimerReceiver` (FASE 4);
-`DashboardScreen`/`DashboardViewModel`, `WorkoutScreen`/`WorkoutViewModel`,
-`HistoryListScreen`/`SessionDetailScreen`, `ProgressScreen` (con gráfico propio en `Canvas`),
-`StatCard`, `LineChart` (FASE 4-5); pantallas de importar por código/imagen y de exportar/compartir
-(FASE 6).
+`UpdateProfileUseCase`, `SignOutUseCase` (FASE 5); `ShareRoutineUseCase`,
+`ImportSharedRoutineUseCase`, `ImportRoutineFromImageUseCase`, `BuildWorkoutExportUseCase`
+(FASE 6); `DashboardScreen`/`DashboardViewModel`, `HistoryListScreen`/`SessionDetailScreen`,
+`ProgressScreen` (con gráfico propio en `Canvas`), `StatCard`, `LineChart` (FASE 5); pantallas de
+importar por código/imagen y de exportar/compartir (FASE 6).
