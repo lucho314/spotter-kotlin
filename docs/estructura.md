@@ -1,8 +1,10 @@
 # Estructura del proyecto
 
 Árbol verificado contra `app/src/main/java/com/lucho314/spotter/` y `app/src/test/java/com/lucho314/spotter/`
-tras FASES 1-4. Un solo módulo Gradle `:app`. Los paquetes/archivos marcados **(planificado)** no
-existen todavía — ver `docs/arquitectura.md` sección "Planificado".
+tras FASES 1-5 (FASES 1-4 compiladas/testeadas en máquina; FASE 5 código escrito, 147 tests de
+dominio verificados en arnés JVM, resto sin compilar por falta de SDK). Un solo módulo Gradle `:app`.
+Los paquetes/archivos marcados **(planificado)** no existen todavía — ver `docs/arquitectura.md`
+sección "Planificado".
 
 ## Raíz
 
@@ -21,7 +23,7 @@ SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory
 | `core/config/` | `AppConfig.kt`, `ConfigModule.kt` | Valida `SUPABASE_URL`/`SUPABASE_ANON_KEY` en runtime; si es inválida, se evita construir el `SupabaseClient` |
 | `core/database/` | `SpotterDatabase.kt`, `DatabaseModule.kt`, `dao/ActiveWorkoutDao.kt`, `dao/CachedPayloadDao.kt`, `dao/PendingWorkoutDao.kt`, `entity/ActiveWorkoutEntities.kt`, `entity/CachedPayloadEntity.kt`, `entity/PendingWorkoutEntities.kt` | Room v1: caché de lectura, entrenamiento activo, outbox de sincronización |
 | `core/datastore/` | `DataStoreModule.kt` | Dos `DataStore<Preferences>`: `secure_auth` (sesión y PKCE cifrados) y `user_prefs` |
-| `core/designsystem/component/` | `Chip.kt` (`SpotterChip`), `ConfirmDialog.kt`, `EmptyState.kt`, `ErrorState.kt`, `ExerciseMedia.kt` (`isVideoUrl`, `ExerciseMedia`), `LoadingState.kt`, `NumberStepper.kt`, `SectionHeader.kt`, `SpotterButton.kt`, `SpotterCard.kt`, `SpotterTextField.kt` | Componentes Compose reutilizables |
+| `core/designsystem/component/` | `Chip.kt` (`SpotterChip`), `ConfirmDialog.kt`, `EmptyState.kt`, `ErrorState.kt`, `ExerciseMedia.kt` (`isVideoUrl`, `ExerciseMedia`), `LoadingState.kt`, `NumberStepper.kt`, `SectionHeader.kt`, `SpotterButton.kt`, `SpotterCard.kt`, `SpotterTextField.kt`, `LineChartGeometry.kt` (FASE 5), `LineChart.kt` (FASE 5), `StatCard.kt` (FASE 5) | Componentes Compose reutilizables |
 | `core/designsystem/theme/` | `Color.kt`, `Shape.kt`, `Spacing.kt`, `Theme.kt`, `Type.kt` | Tema, tipografía, espaciado |
 | `core/navigation/` | `DeepLink.kt` (`DeepLink`, `DeepLinkParser`), `RouteArgs.kt`, `Routes.kt`, `SpotterNavHost.kt`, `TopLevelDestination.kt` | Rutas type-safe, `NavHost` único, parsing de deep links |
 | `core/network/` | `NetworkModule.kt`, `NetworkMonitor.kt`, `SafeCall.kt` (`safeCall`, `ErrorMapper`), `SupabaseModule.kt` | Cliente Supabase (Auth/Postgrest/Functions), mapeo de excepciones a `AppError`, monitor de conectividad |
@@ -34,9 +36,9 @@ SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory
 | Paquete | Archivos | Contenido |
 |---|---|---|
 | `domain/model/` | `ActiveWorkoutModels.kt`, `AuthModels.kt`, `DashboardModels.kt` (`DashboardStats`, sin consumidores aún), `ExerciseModels.kt`, `PendingWorkoutModels.kt`, `ProfileModels.kt`, `ProgressModels.kt`, `RoutineModels.kt`, `ShareCode.kt`, `SharingModels.kt`, `TemplateModels.kt`, `WeightUnit.kt`, `WorkoutModels.kt` | Data classes / enums / sealed interfaces del dominio |
-| `domain/repository/` | 12 interfaces (ver `componentes.md`) | Contratos que implementa `data/repository` |
-| `domain/usecase/` | `AdoptTemplateUseCase.kt` (FASE 3); `StartWorkoutUseCase.kt`, `UpdateSetInputUseCase.kt`, `ToggleSetCompletionUseCase.kt`, `FinishWorkoutUseCase.kt`, `DiscardWorkoutUseCase.kt`, `SyncPendingWorkoutsUseCase.kt` (FASE 4) | Los use cases de fases 5-6 se difieren a las fases que los necesitan |
-| `domain/calc/` | `ActiveSetWeight.kt`, `AgeCalculator.kt`, `ExerciseProgressAggregator.kt`, `NumberFormatter.kt`, `RoutineOrdering.kt`, `SpanishWeekdays.kt`, `Validators.kt`, `WeekRange.kt`, `WeightConverter.kt`, `WeightInputParser.kt`, `WorkoutMath.kt` | Cálculos puros, 100% cubiertos por tests unitarios |
+| `domain/repository/` | 12 interfaces + `LocalDataRepository.kt` (FASE 5) | Contratos que implementa `data/repository` |
+| `domain/usecase/` | `AdoptTemplateUseCase.kt` (FASE 3); `StartWorkoutUseCase.kt`, `UpdateSetInputUseCase.kt`, `ToggleSetCompletionUseCase.kt`, `FinishWorkoutUseCase.kt`, `DiscardWorkoutUseCase.kt`, `SyncPendingWorkoutsUseCase.kt` (FASE 4); `GetDashboardStatsUseCase.kt`, `GetExerciseProgressUseCase.kt`, `GetProfileOverviewUseCase.kt`, `UpdateProfileUseCase.kt`, `SignOutUseCase.kt` (FASE 5) | Los use cases de FASE 6 se difieren a esa fase |
+| `domain/calc/` | `ActiveSetWeight.kt`, `AgeCalculator.kt`, `ExerciseProgressAggregator.kt`, `NumberFormatter.kt`, `RoutineOrdering.kt`, `SetInputValidator.kt` (FASE 5), `SpanishWeekdays.kt`, `Validators.kt`, `WeekRange.kt`, `WeightConverter.kt`, `WeightInputParser.kt`, `WorkoutMath.kt` | Cálculos puros, 100% cubiertos por tests unitarios |
 
 ## `data/` — implementación de datos
 
@@ -45,7 +47,7 @@ SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory
 | `data/remote/dto/` | `Dtos.kt` | DTOs `@Serializable` con `@SerialName` snake_case, espejo del esquema Supabase |
 | `data/remote/datasource/` | Interfaz + `Supabase*RemoteDataSource` para: `AiImportRemoteDataSource`, `AuthDataSource`, `ExerciseRemoteDataSource`, `ProfileRemoteDataSource`, `ProgressRemoteDataSource`, `RoutineRemoteDataSource`, `SharingRemoteDataSource`, `TemplateRemoteDataSource`, `WorkoutRemoteDataSource`; más `DataSourceModule.kt` (`@Binds`) | Acceso a Supabase (Postgrest/Auth/Functions) detrás de interfaces, para poder testear los repos con fakes |
 | `data/mapper/` | `ActiveWorkoutEntityMapper.kt`, `AuthStateMapper.kt`, `AuthUserMapper.kt`, `DateMappers.kt`, `ExerciseMapper.kt`, `PendingWorkoutMapper.kt`, `ProfileMapper.kt`, `ProgressMapper.kt`, `RoutineMapper.kt`, `SharingMapper.kt`, `TemplateMapper.kt`, `WorkoutMapper.kt` | DTO ↔ dominio y entidad Room ↔ dominio |
-| `data/repository/` | `ActiveWorkoutRepositoryImpl.kt`, `AiImportRepositoryImpl.kt`, `AuthRepositoryImpl.kt`, `ExerciseRepositoryImpl.kt`, `PendingWorkoutRepositoryImpl.kt`, `PreferencesRepositoryImpl.kt`, `ProfileRepositoryImpl.kt`, `ProgressRepositoryImpl.kt`, `RepositoryModule.kt` (`@Binds`), `RoutineRepositoryImpl.kt`, `SharingRepositoryImpl.kt`, `TemplateRepositoryImpl.kt`, `WorkoutHistoryRepositoryImpl.kt` | Las 12 implementaciones de `domain/repository` |
+| `data/repository/` | `ActiveWorkoutRepositoryImpl.kt`, `AiImportRepositoryImpl.kt`, `AuthRepositoryImpl.kt`, `ExerciseRepositoryImpl.kt`, `LocalDataRepositoryImpl.kt` (FASE 5), `PendingWorkoutRepositoryImpl.kt`, `PreferencesRepositoryImpl.kt`, `ProfileRepositoryImpl.kt`, `ProgressRepositoryImpl.kt`, `RepositoryModule.kt` (`@Binds`), `RoutineRepositoryImpl.kt`, `SharingRepositoryImpl.kt`, `TemplateRepositoryImpl.kt`, `WorkoutHistoryRepositoryImpl.kt` | Las 12 + 1 (FASE 5) implementaciones de `domain/repository` |
 | `data/export/` **(planificado)** | — | Generación de PDF/JPEG de entrenamientos (FASE 6) |
 | `data/image/` **(planificado)** | — | Compresión/EXIF/base64 para la importación con IA (FASE 6) |
 
@@ -55,8 +57,12 @@ SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory
 feature/
 ├── auth/                    LoginScreen/ViewModel, OnboardingScreen/ViewModel, GoogleCredentialClient, NonceGenerator
 ├── root/                    SpotterRoot, RootViewModel (guardia de sesión + deep link pendiente), ConfigErrorScreen
-├── common/                  ObserveAsEvents, ErrorMessages, ValidationMessages, RoutineExerciseSummary, ComingSoonScreen (placeholder)
-├── profile/                 ProfileScreen/ViewModel — identidad + cerrar sesión (cancela alarma y sync; datos físicos: fase 5)
+├── common/                  ObserveAsEvents, ErrorMessages, ValidationMessages, RoutineExerciseSummary, 
+│                            ComingSoonScreen (placeholder), ActiveWorkoutBanner (FASE 5),
+│                            DateFormats (FASE 5), SectionState (FASE 5)
+├── profile/                 ProfileScreen/ViewModel — identidad, datos físicos, estadísticas, 
+│                            unidad kg/lb, cerrar sesión con SignOutUseCase (FASE 5)
+│                            BirthDateInput (FASE 5), ProfileGoalLabels (FASE 5)
 ├── exercise/                ExerciseDetailScreen/ViewModel, ExerciseLabels
 ├── routines/
 │   ├── list/                RoutinesScreen/ViewModel, ArchivedRoutinesScreen/ViewModel
@@ -64,10 +70,10 @@ feature/
 │   ├── detail/               RoutineDetailScreen/ViewModel (días, drag&drop, mover de día, agregar ejercicio)
 │   └── addexercise/          AddExerciseScreen/ViewModel
 ├── templates/                TemplateLabels, list/TemplatesScreen/ViewModel, detail/TemplateDetailScreen/ViewModel
-├── dashboard/    (planificado)
+├── dashboard/               DashboardScreen/ViewModel (FASE 5), DashboardFormatters (FASE 5)
 ├── workout/                 WorkoutScreen/ViewModel (entrenamiento activo, timers, series, último entrenamiento)
-├── history/      (planificado — HistoryRoute hoy renderiza ComingSoonScreen)
-├── progress/     (planificado — ProgressRoute hoy renderiza ComingSoonScreen)
+├── history/                 list/HistoryScreen/ViewModel, detail/SessionDetailScreen/ViewModel (FASE 5)
+├── progress/                ProgressScreen/ViewModel (FASE 5)
 └── importroutine/(planificado — ImportCodeRoute/ImportImageRoute hoy renderizan ComingSoonScreen)
 ```
 
@@ -82,17 +88,23 @@ más `drawable/`, `font/`, `mipmap-*/`, `raw/`.
 
 Un test unitario por clase de producción con lógica no trivial, más `testutil/` con fakes
 compartidos (`FakeAead`, `FakeAuthDataSource`, `FakeAuthRepository`, `FakeExerciseRemoteDataSource`,
-`FakeExerciseRepository`, `FakeIdGenerator`, `FakeLogger`, `FakePreferencesRepository`,
-`FakeRoutineRemoteDataSource`, `FakeRoutineRepository`, `FakeSharingRemoteDataSource`,
-`FakeTemplateRepository`, `FakeTimeProvider`, `FakeWorkoutRemoteDataSource`, `FakeAiImportRemoteDataSource`,
-`CountingLazy`, `MainDispatcherRule`). Los tests de Room (`ActiveWorkoutDaoTest`,
-`CachedPayloadDaoTest`, `PendingWorkoutDaoTest`) corren con Robolectric sobre una base en memoria.
-**355 `@Test`** en el código tras FASE 4 (conteo de anotaciones; la corrida anterior en verde,
-tras FASE 3, tenía 308). Tests de FASE 4: `StartWorkoutUseCaseTest`,
-`ToggleSetCompletionUseCaseTest`, `FinishWorkoutUseCaseTest`, `SyncPendingWorkoutsUseCaseTest`,
-`SyncWorkoutsWorkerTest` (Robolectric), `WorkoutViewModelTest`, `RestTimerTest`, más casos nuevos en
-`ActiveWorkoutDaoTest`, `ActiveWorkoutRepositoryImplTest`, `RoutineDetailViewModelTest` y
-`ProfileViewModelTest`.
+`FakeExerciseRepository`, `FakeIdGenerator`, `FakeLogger`, `FakeLocalDataRepository` (FASE 5),
+`FakePreferencesRepository`, `FakeProfileRepository` (FASE 5), `FakeProgressRepository` (FASE 5),
+`FakeProfileRemoteDataSource` (FASE 5), `FakeRoutineRemoteDataSource`, `FakeRoutineRepository`,
+`FakeSharingRemoteDataSource`, `FakeTemplateRepository`, `FakeTimeProvider`, `FakeWorkoutHistoryRepository`,
+`FakeWorkoutRemoteDataSource`, `FakeAiImportRemoteDataSource`, `CountingLazy`, `MainDispatcherRule`).
+Los tests de Room (`ActiveWorkoutDaoTest`, `CachedPayloadDaoTest`, `LocalDataRepositoryImplTest` (FASE 5),
+`PendingWorkoutDaoTest`) corren con Robolectric sobre una base en memoria.
+
+**458 `@Test`** en el código tras FASE 5 (conteo de anotaciones); 147 de dominio + helpers verificados
+sin SDK en arnés JVM, resto sin compilar. Tests de FASE 5 nuevos: `GetDashboardStatsUseCaseTest`,
+`GetExerciseProgressUseCaseTest`, `GetProfileOverviewUseCaseTest`, `UpdateProfileUseCaseTest`,
+`SignOutUseCaseTest`, `SetInputValidatorTest`, `HistoryViewModelTest`, `SessionDetailViewModelTest`,
+`ProgressViewModelTest`, `DashboardViewModelTest`, `DashboardFormattersTest`, `ProfileViewModelTest`
+(reescrita), `WorkoutViewModelTest` (con caso `closing`), `LocalDataRepositoryImplTest`, `ProfileRepositoryImplTest`,
+`LineChartGeometryTest`, `BirthDateInputTest`, `SpotterDateFormatsTest`. Tests de FASE 4 anteriores
+aún presentes: `StartWorkoutUseCaseTest`, `ToggleSetCompletionUseCaseTest`, `FinishWorkoutUseCaseTest`,
+`SyncPendingWorkoutsUseCaseTest`, `SyncWorkoutsWorkerTest` (Robolectric), `RestTimerTest`, etc.
 
 ## Documentación (`docs/`)
 

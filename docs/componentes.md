@@ -1,8 +1,9 @@
 # Componentes principales
 
-Clases e interfaces reales del código tras FASES 1-4, agrupadas por capa. Cada identificador
-listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado). La sección final
-"Planificado" lista los nombres que el plan define para fases futuras y que **no existen todavía**.
+Clases e interfaces reales del código tras FASES 1-5, agrupadas por capa. Cada identificador
+listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado tras FASES 1-4 en
+máquina, FASE 5 código escrito no compilado). La sección final "Planificado" lista los nombres
+que el plan define para FASES 6-7 y que **no existen todavía**.
 
 ## `core/common` — tipos y utilidades compartidas
 
@@ -13,8 +14,9 @@ listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado). 
   Extensiones: `map`, `onSuccess`, `onFailure`, `getOrNull`, `notNullOrNotFound()`,
   `requirePositiveOrNotFound()` (colapsa un conteo de filas afectadas en `NotFound` cuando es 0 —
   importante bajo RLS, donde un update/delete sin permiso devuelve 0 filas con status 2xx).
-- **`ValidationReason`** (`enum`): 19 razones (`NAME_EMPTY`, `SETS_RANGE`, `DAYS_MAX_REACHED`, etc.),
-  mapeadas a mensajes en `feature/common/ValidationMessages.kt`.
+- **`ValidationReason`** (`enum`): 21 razones (`NAME_EMPTY`, `SETS_RANGE`, `DAYS_MAX_REACHED`,
+  `WORKOUT_REPS_RANGE`, `AGE_RANGE`, etc.), mapeadas a mensajes en
+  `feature/common/ValidationMessages.kt`.
 - **`Logger`** (interfaz) / **`AndroidLogger`**: `d`/`w`/`e`, no-op fuera de `BuildConfig.DEBUG`.
 - **`TimeProvider`** (interfaz) / **`SystemTimeProvider`**: `now(): Instant`, `zone(): ZoneId`,
   inyectado para que ViewModels/use cases sean deterministas en tests (`FakeTimeProvider`).
@@ -51,6 +53,17 @@ listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado). 
 - **`SupabaseModule`**: provee `Json` (config de deserialización tolerante — ver
   `MIGRATION_PLAN.md` §6), `SupabaseClient` (Auth en modo PKCE con los managers cifrados de
   arriba, Postgrest, Functions).
+
+## `core/designsystem/component` — nuevos componentes (FASE 5)
+
+- **`StatCard`**: `@Composable fun StatCard(label, value, modifier, supportingText?, valueColor)`.
+  Tarjeta con etiqueta y valor destacado; utilizado en Dashboard (sesiones, última sesión),
+  Progreso (PRs) y Perfil (estadísticas).
+- **`LineChartGeometry`** (puro): `xPositions`, `yPosition`, `labelIndices` — cálculos de
+  posicionamiento para gráficos en Canvas sin dependencias de Compose.
+- **`LineChart`**: `@Composable fun LineChart(points: List<ChartPoint>, modifier, lineColor?, maxLabels?)`.
+  Gráfico de línea en `Canvas` con ejes, línea, puntos y etiquetas "d/M" para los últimos N puntos.
+  Utilizado en `ProgressScreen`.
 
 ## `core/database`
 
@@ -116,6 +129,7 @@ Sin lógica de infraestructura. Principales: `RoutineSummary`/`RoutineDetail`/`R
 | `WorkoutHistoryRepository` | `getSessions(page)`, `getSession`, `updateSet`, `addSet`, `deleteSet`, `deleteSession`, `getLastSession`, `getCompletedSince`, `getLastCompletedAt`, `countCompleted` |
 | `ProgressRepository` | `getPersonalRecords`, `getLatestPersonalRecord`, `countPersonalRecords`, `getExerciseSets(limit=500)` |
 | `ProfileRepository` | `getProfile`, `updatePhysical`, `countActiveRoutines` |
+| `LocalDataRepository` | `clearAll()` — borra todas las tablas Room (active/pending/cached) de forma atómica (FASE 5) |
 
 Todos los métodos suspend que cruzan red devuelven `AppResult<T>`; los `Flow` (`observe*`) nunca
 lanzan, reflejan el estado del caché local.
@@ -145,15 +159,32 @@ lanzan, reflejan el estado del caché local.
   `Unauthorized`, `Server` 5xx o sin código) → `recordAttempt` y `RetryLater`; el resto (p. ej. un
   42501 de RLS, conflicto) → `markFailed` (`FAILED`). `lastError` guarda un código corto sin PII.
   Subir dos veces es seguro (upsert idempotente por `id`).
+- **`GetDashboardStatsUseCase`** (FASE 5): `invoke(userId): DashboardStats` — sesiones de esta
+  semana, última sesión, último PR; cada sección es un `AppResult` independiente (fallo parcial no
+  bloquea al resto).
+- **`GetExerciseProgressUseCase`** (FASE 5): `invoke(userId, exerciseId): AppResult<List<ExerciseProgressPoint>>` —
+  puntos de progreso (1RM por sesión) agregados del histórico, máximo 12 sesiones recientes.
+- **`GetProfileOverviewUseCase`** (FASE 5): `invoke(userId): AppResult<ProfileOverview>` — perfil +
+  estadísticas (entrenamientos, PRs, rutinas activas); perfil falla → falla todo; si falla solo
+  algún conteo → `stats = null` y `statsError` seteado.
+- **`UpdateProfileUseCase`** (FASE 5): `invoke(userId, current, edit): AppResult<Profile>` — valida
+  y persiste datos físicos (peso kg/lb con conversión, altura, fecha nacimiento con edad en
+  10..100). Campo vacío borra el dato. Devuelve el `Profile` actualizado.
+- **`SignOutUseCase`** (FASE 5): `invoke(): AppResult<Unit>` — cancela alarma y worker, borra toda
+  Room (`LocalDataRepository.clearAll()`), llama `signOut()`, borra preferencias por usuario
+  (conserva unidad kg/lb). Si falla el borrado, no cierra sesión y reprograma sync. Además,
+  `risk(userId): SignOutRisk` calcula entrenamientos sin sincronizar e indica si hay uno activo.
 
 ## `domain/calc` — cálculos puros (100% testeados)
 
-`WorkoutMath` (1RM Epley), `WeightConverter` (kg↔lb), `WeightInputParser` (acepta `,`/`.`),
-`WeekRange` (semana lunes-domingo en zona local), `AgeCalculator` (`Period.between`),
+`WorkoutMath` (1RM Epley), `WeightConverter` (kg↔lb, `formatOneDecimal`), `WeightInputParser`
+(acepta `,`/`.`), `WeekRange` (semana lunes-domingo en zona local), `AgeCalculator` (`Period.between`),
 `RoutineOrdering` (orden por día, `nextSortOrder`, `suggestedFirstDayNumber`,
-`unassignedBucketDayNumber`), `SpanishWeekdays`, `ExerciseProgressAggregator`, `NumberFormatter`,
-`Validators`, `ActiveSetWeight` (FASE 4: regla única "peso vacío inválido salvo en `BODYWEIGHT`",
-compartida por `ToggleSetCompletionUseCase` y `FinishWorkoutUseCase`).
+`unassignedBucketDayNumber`), `SpanishWeekdays`, `ExerciseProgressAggregator`, `NumberFormatter`
+(`formatVolume` con unidad), `SetInputValidator` (FASE 5: valida peso + reps para series con
+conversión de unidades), `Validators`, `ActiveSetWeight` (FASE 4: regla única "peso vacío
+inválido salvo en `BODYWEIGHT`", compartida por `ToggleSetCompletionUseCase` y
+`FinishWorkoutUseCase`).
 
 ## `data/remote` y `data/mapper`
 
@@ -181,10 +212,13 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   sea del mismo usuario (FASE 4).
 - **`PendingWorkoutRepositoryImpl`**: sobre `PendingWorkoutDao`; `upload()` hace upsert idempotente
   contra Supabase.
-- El resto (`AuthRepositoryImpl`, `PreferencesRepositoryImpl`, `TemplateRepositoryImpl`,
-  `SharingRepositoryImpl`, `AiImportRepositoryImpl`, `WorkoutHistoryRepositoryImpl`,
-  `ProgressRepositoryImpl`, `ProfileRepositoryImpl`) van directo contra su `RemoteDataSource` con
-  `safeCall`, sin caché local.
+- **`LocalDataRepositoryImpl`** (FASE 5): sobre `SpotterDatabase` con transacción atómica;
+  `clearAll()` borra las tres familias de tablas en orden (sets antes que padre, para respetar
+  foreign keys).
+- El resto (`AuthRepositoryImpl`, `PreferencesRepositoryImpl`, `ProfileRepositoryImpl` (FASE 5),
+  `ProgressRepositoryImpl`, `TemplateRepositoryImpl`, `SharingRepositoryImpl`, `AiImportRepositoryImpl`,
+  `WorkoutHistoryRepositoryImpl`) van directo contra su `RemoteDataSource` con `safeCall`, sin
+  caché local.
 
 ## `feature/root`
 
@@ -207,12 +241,20 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   (`PreferencesRepository.isOnboardingDone`).
 - **`GoogleCredentialClient`**, **`NonceGenerator`** (SHA-256 del nonce crudo).
 
-## `feature/profile`
+## `feature/profile` (reescrita en FASE 5)
 
-- **`ProfileViewModel`**: `ProfileUiState(displayName, email, signingOut, errorMessageRes)`;
-  `onSignOutConfirmed()` cancela la alarma de descanso y el worker de sincronización y luego llama
-  `AuthRepository.signOut()` (sin `SignOutUseCase` — no limpia Room/DataStore todavía, FASE 5). **`ProfileScreen`**: identidad +
-  botón "Cerrar sesión" con `ConfirmDialog`.
+- **`ProfileViewModel`** (FASE 5): `ProfileUiState` con perfil, edad calculada, estadísticas,
+  campos editables (peso, altura, fecha de nacimiento, objetivo), unidad kg/lb, indicador de
+  guardado y estado de cierre de sesión; eventos one-shot `Message` (success/error). Métodos:
+  `onEdit(field)`, `onSaveWeight/Height/BirthDate/Goal`, `onWeightUnitChange`, `onSignOutClick`,
+  `onSignOutConfirmed()` (invoca `SignOutUseCase`), `onSignOutDismiss()`, `retry()`.
+- **`ProfileScreen`** (FASE 5): avatar (`AsyncImage` o inicial), nombre/email, "ESTADÍSTICAS"
+  (entrenamientos/PRs/rutinas), "DATOS FÍSICOS" (peso en unidad preferida, altura, edad con
+  autoformato de fecha, objetivo), "CONFIGURACIÓN" (unidad con `SegmentedButton` kg/lb),
+  "Cerrar sesión" con `ConfirmDialog` que muestra advertencia si hay entrenamientos sin sincronizar
+  o en curso.
+- **`BirthDateInput`** (FASE 5, puro): autoformato de entrada "DD/MM/AAAA" a medida que escribe.
+- **`ProfileGoalLabels`** (FASE 5): mapeo de `ProfileGoal` a strings localizados.
 
 ## `feature/routines`
 
@@ -272,11 +314,17 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
 - **`ObserveAsEvents(flow, onEvent)`**: colector de eventos one-shot lifecycle-aware
   (`repeatOnLifecycle(STARTED)`), usado por las 6 pantallas de FASE 3 en vez de un
   `LaunchedEffect(Unit)` plano (ver `arquitectura.md`).
-- **`AppError.toMessageRes()`/`toLoginMessageRes()`**, **`ValidationReason.toMessageRes()`**:
-  mapeos a strings localizados.
+- **`AppError.toMessageRes()`/`toLoginMessageRes()`/`toUserMessageRes()` (FASE 5)**,
+  **`ValidationReason.toMessageRes()`**: mapeos a strings localizados.
 - **`routineExerciseSummary(sets, reps, restSeconds)`**: "N series × N reps · Ns descanso" con
   plurales reales.
-- **`ComingSoonScreen`**: placeholder para Dashboard/Historial/Progreso/Entrenamiento/Import.
+- **`ComingSoonScreen`**: placeholder para ImportCodeRoute/ImportImageRoute (FASE 6).
+- **`SectionState<T>`** (FASE 5, sealed interface): `Loading`, `Loaded<T>`, `Error(@StringRes)` —
+  estado genérico de sección que puede estar cargando, cargada o con error.
+- **`DateFormats`** (FASE 5, puro): `longDay(instant, zone)` → "lunes 3 de marzo",
+  `shortDayMonth(instant, zone)` → "3/3", `birthDate(localDate)` → "DD/MM/AAAA".
+- **`ActiveWorkoutBanner`** (FASE 5, compartida): composable que muestra "Entrenamiento en curso ·
+  Continuar" si `activeWorkoutRoutineName != null`; usada en Dashboard y Rutinas.
 
 ## `core/notifications` y `core/work` (FASE 4)
 
@@ -293,17 +341,57 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   `sync_workouts` (`APPEND_OR_REPLACE`, red requerida, backoff exponencial 30 s); `cancel()`.
 - Bindings en `NotificationsModule` y `WorkModule`.
 
+## `feature/dashboard` (FASE 5)
+
+- **`DashboardViewModel`** (`DashboardUiState`, `DashboardEvent`): saludo según la hora, sesiones
+  de esta semana, última sesión ("Hoy"/"Ayer"/"Hace N días"/"-"), último PR, top 3 rutinas
+  ordenadas por día de la semana, estadísticas de sincronización pendiente. Acciones:
+  `refresh()`, `retry()`, `refreshOnResume()` con throttle, `onStartWorkoutClick`,
+  `onSeeAllRoutinesClick`, `onPendingClick`, `onCreateRoutineClick`, `onRoutineClick`,
+  `onResumeWorkoutClick`, `onFinishedWorkoutConsumed()`.
+- **`DashboardScreen`** (FASE 5): saludo + nombre, tarjetas de estadísticas, banner de
+  entrenamiento en curso o botón "Iniciar Entrenamiento", último PR, "Mis Rutinas" con top 3,
+  chip de pendientes (condicional), pull-to-refresh. Recibe relay flag `workoutFinishedOnline`
+  vía `savedStateHandle` y muestra snackbar correspondiente.
+- **`DashboardFormatters`** (FASE 5, puro): `Greeting` enum, `greetingFor(now, zone)`,
+  `LastSessionLabel` (sealed interface), `lastSessionLabel(last, now, zone)`.
+
+## `feature/history` (FASE 5)
+
+- **`list/HistoryViewModel`** (`HistoryUiState`, `HistoryEvent`): lista de sesiones paginadas
+  (offset/limit, 30 por página), banner de pendientes y de fallidos (con "Reintentar" y "Descartar"),
+  borrado con confirmación. Acciones: `refresh()`, `retry()`, `loadMore()`, `onDeleteSession(id)`,
+  `onRetryFailed(id)`, `onDiscardFailed(id)`.
+- **`list/HistoryScreen`** (FASE 5): `PullToRefreshBox` + `LazyColumn` de `SessionCard`,
+  banner de pendientes/fallidos, "Cargar más" con loading si hay más páginas.
+- **`detail/SessionDetailViewModel`** (`ExerciseBlock`, `EditingSet`, `SessionDetailUiState`,
+  `SessionDetailEvent`): detalle de sesión con bloques por ejercicio, edición por fila con
+  validación, agregar serie, borrado con confirmación. Acciones: `onEditSet(id)`, `onEditDismiss()`,
+  `onEditConfirm(weight, reps)`, `onDeleteSet(id)`, `onAddSet(exerciseId)`, `retry()`.
+- **`detail/SessionDetailScreen`** (FASE 5): `TopAppBar`, hero (duración/volumen/series), bloques
+  con filas de series (editable, borrable), diálogo de edición.
+
+## `feature/progress` (FASE 5)
+
+- **`ProgressViewModel`** (`ProgressChartPoint`, `ProgressChartState`, `ProgressUiState`):
+  carga records personales, selección de ejercicio para gráfico. Acciones: `refresh()`, `retry()`,
+  `onExerciseChipClick(exerciseId)`.
+- **`ProgressScreen`** (FASE 5): `PullToRefreshBox`, tarjetas de records personales (PR, 1RM con
+  trofeo), chips de ejercicios (click para seleccionar/deseleccionar), `LineChart` de 1RM por
+  sesión con etiquetas "d/M".
+
 ## `core/designsystem/component`
 
 `SpotterButton` (variantes `Primary`/`Secondary`/`Ghost`, tamaños `Small`/`Medium`/`Large`),
 `SpotterCard`, `SpotterTextField`, `SpotterChip`, `NumberStepper`, `SectionHeader`, `ConfirmDialog`,
-`LoadingState`, `ErrorState`, `EmptyState`, `ExerciseMedia` (+ función `isVideoUrl`).
+`LoadingState`, `ErrorState`, `EmptyState`, `ExerciseMedia` (+ función `isVideoUrl`), `StatCard`,
+`LineChart`, `LineChartGeometry` (FASE 5).
 
-## Planificado (no implementado — nombres del plan, fases 5-7)
+## Planificado (no implementado — nombres del plan, fases 6-7)
 
-`GetDashboardStatsUseCase`, `GetExerciseProgressUseCase`, `GetProfileOverviewUseCase`,
-`UpdateProfileUseCase`, `SignOutUseCase` (FASE 5); `ShareRoutineUseCase`,
-`ImportSharedRoutineUseCase`, `ImportRoutineFromImageUseCase`, `BuildWorkoutExportUseCase`
-(FASE 6); `DashboardScreen`/`DashboardViewModel`, `HistoryListScreen`/`SessionDetailScreen`,
-`ProgressScreen` (con gráfico propio en `Canvas`), `StatCard`, `LineChart` (FASE 5); pantallas de
-importar por código/imagen y de exportar/compartir (FASE 6).
+**FASE 6:** `ShareRoutineUseCase`, `ImportSharedRoutineUseCase`, `ImportRoutineFromImageUseCase`,
+`BuildWorkoutExportUseCase`; `feature/importroutine/code/ImportCodeScreen`/`ViewModel`,
+`feature/importroutine/image/ImportImageScreen`/`ViewModel` (hoy son `ComingSoonScreen`);
+`feature/history/share/ShareWorkoutSheet` (para PDF/JPEG).
+
+**FASE 7:** verificación en dispositivo real, endurecimiento de release, R8 proguard rules.

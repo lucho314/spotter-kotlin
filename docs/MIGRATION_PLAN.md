@@ -1223,7 +1223,22 @@ El botón primario usa un gradiente horizontal `#F4FFC6 → #C7EF00` con texto `
 
 **Tests de la fase 5:** `HistoryViewModelTest` (paginación, borrado, reintentar y descartar fallidos), `SessionDetailViewModelTest` (validación, `setNumber = max + 1`, `completedAt` de la sesión, guardado por fila), `ProgressViewModelTest`, `GetDashboardStatsUseCaseTest` (semana desde lunes, pendientes, fallo parcial), `DashboardViewModelTest`, `UpdateProfileUseCaseTest` (rangos, fechas imposibles como 31/02, futuras, conversión lb → kg), `ProfileViewModelTest`, `SignOutUseCaseTest` (limpia la base y las preferencias por usuario, cancela la alarma, conserva la unidad).
 
-**Aceptación de la fase 5:** tests verdes; las cinco pestañas son funcionales.
+**Aceptación de la fase 5:** tests verdes; las cinco pestañas son funcionales. Sin compilación del árbol Android en la sesión de implementación (no había SDK disponible): 147 tests de dominio + helpers puros verificados en arnés JVM independiente; resto de ViewModel/Room/UI escritos sin compilar.
+
+**Desviaciones registradas durante la implementación:**
+
+1. **`DashboardStats`:** model con tres `AppResult` independientes (sesiones, última sesión, PR) en vez de un solo `AppResult<DashboardStats>`. Permite que un error parcial no bloquee el resto (p. ej. si falla el PR pero llegan las sesiones, se muestran las sesiones). No incluye `pendingSyncCount`: el conteo de pendientes se observa directamente en `DashboardViewModel` desde Room en vivo.
+2. **Paginación:** `WorkoutHistoryRepository.getSessions(offset, limit)` en lugar de `(page, pageSize)`. Es más robusto ante duplicados y borrados intermedios: `distinctBy(id)` se aplica al concatenar.
+3. **Recuento de filas afectadas:** `updateSet`, `deleteSet` y `updatePhysical` devuelven `Int` y aplican `requirePositiveOrNotFound()`. Bajo RLS, un update/delete sin permiso devuelve 0 filas sin lanzar excepción: esto lo convierte en `NotFound`.
+4. **`SignOutUseCase` con `LocalDataRepository`:** el use case borra Room usando una interfaz (no `SpotterDatabase` ni `WorkManager`, que son Android). Si falla el borrado, **no cierra sesión** y reprograma la sincronización para reintentar. La limpieza va **antes** de `signOut()` para evitar que otro usuario se log-in y vea un outbox anterior.
+5. **`risk()`:** en lugar de solo contar pendientes, devuelve `SignOutRisk(unsyncedWorkouts, hasActiveWorkout)`. El `ProfileScreen` muestra la advertencia correspondiente.
+6. **Banner compartido:** "Entrenamiento en curso" vive en Dashboard **y** Rutinas (no solo Dashboard). Se extrajo a `feature/common/ActiveWorkoutBanner.kt`.
+7. **Relay del snackbar:** al finalizar, `WorkoutScreen.onFinished(online)` navega al Dashboard pasando el flag en `savedStateHandle` bajo la clave `KEY_WORKOUT_FINISHED_ONLINE`. El Dashboard lo lee, consume y muestra el snackbar. Descartar sigue con `popBackStack()`.
+8. **Carrera `NoActiveWorkout`:** `WorkoutViewModel` agrega `private var closing = false`, que se pone en `true` al empezar `onFinish`/`onDiscard`, y se restaura a `false` si la operación falla. Mientras es `true`, el `combine` no emite `NoActiveWorkout`, evitando la carrera que hacía saltar atrás y perder el snackbar.
+9. **Historial:** "Cargar más" en vez de scroll infinito (detalle técnico: con scroll infinito y offset paginado, si se sincroniza una sesión mientras se pagina, el offset se corre; "Cargar más" deja control explícito).
+10. **Progreso:** chips sin preselección. Arranca con un texto de ayuda "Elegí un ejercicio"; tocar un chip lo selecciona, tocar el mismo lo deselecciona. Los chips salen de los ejercicios que tienen PR.
+11. **Perfil:** campo vacío (tras `trim`) borra el dato (peso, altura, nacimiento). Objetivo admite "Sin especificar" (`null`).
+12. **Onboarding otra vez:** `clearUserScoped()` borra `onboarding_done_*`, así el mismo usuario ve onboarding de nuevo tras sign-out. Es lo que el plan especifica; se puede cambiar en `PreferencesRepositoryImpl.clearUserScoped()` si se decide conservarlo.
 
 ### FASE 6: Compartir e importar rutinas, importación con IA y exportación de entrenamientos
 

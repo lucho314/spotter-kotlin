@@ -1,8 +1,9 @@
 # Arquitectura de Spotter
 
-Estado: refleja el código tras **FASES 1-4** (aprobadas el 2026-09-26). La sección final
-"Planificado" documenta lo que el plan define para fases futuras y que **no existe todavía** en el
-código.
+Estado: refleja el código tras **FASES 1-5** (FASES 1-4 aprobadas el 2026-09-26; FASE 5 implementada
+sin revisión independiente ni compilación de Android, solo 147 tests de dominio verificados en
+arnés JVM). La sección final "Planificado" documenta lo que el plan define para FASES 6-7 y que
+**no existe todavía** en el código.
 
 ## Visión general
 
@@ -31,16 +32,16 @@ Ver el detalle completo en [`estructura.md`](estructura.md). Resumen de responsa
 | `core/config` | `AppConfig` (validación de URL/claves de Supabase en runtime) |
 | `core/database` | Room v1: entidades, DAOs, `SpotterDatabase` |
 | `core/datastore` | Dos `DataStore<Preferences>` con nombre: `secure_auth` (sesión/PKCE cifrados) y `user_prefs` |
-| `core/designsystem` | Tema Compose + componentes reutilizables |
-| `core/navigation` | Rutas `@Serializable`, `SpotterNavHost`, `DeepLinkParser`, `TopLevelDestination` |
+| `core/designsystem` | Tema Compose + componentes reutilizables: `StatCard`, `LineChart`, `LineChartGeometry`, `ActiveWorkoutBanner` (FASE 5) |
+| `core/navigation` | Rutas `@Serializable`, `SpotterNavHost`, `DeepLinkParser`, `TopLevelDestination`, `NavController.navigateToTopLevel()` (FASE 5) |
 | `core/network` | Cliente Supabase, `safeCall`/`ErrorMapper`, `NetworkMonitor` |
 | `core/security` | Cifrado Tink + Android Keystore de sesión y code verifier |
 | `core/notifications` | Canal `rest_timer`, alarma de fin de descanso (`RestTimerAlarmScheduler`) y `RestTimerReceiver` |
 | `core/work` | `SyncWorkoutsWorker` + `SyncScheduler` (WorkManager) para subir el outbox |
-| `domain/model` | Modelos puros de negocio (sin Android, sin DTOs) |
-| `domain/repository` | Interfaces de repositorio (12) |
-| `domain/usecase` | `AdoptTemplateUseCase` (FASE 3) y los 6 use cases del entrenamiento activo y la sincronización (FASE 4) |
-| `domain/calc` | Cálculos puros testeables (peso, edad, semana, orden, etc.) |
+| `domain/model` | Modelos puros de negocio (sin Android, sin DTOs); FASE 5: `DashboardStats`, `ProfileOverview`, `ProfileEdit` |
+| `domain/repository` | Interfaces de repositorio (12) + `LocalDataRepository` (FASE 5) |
+| `domain/usecase` | `AdoptTemplateUseCase` (FASE 3); 6 use cases del entrenamiento activo y sincronización (FASE 4); 5 use cases de historial/progreso/dashboard/perfil (FASE 5): `GetDashboardStatsUseCase`, `GetExerciseProgressUseCase`, `GetProfileOverviewUseCase`, `UpdateProfileUseCase`, `SignOutUseCase` |
+| `domain/calc` | Cálculos puros testeables (peso, edad, semana, orden, etc.); FASE 5: `SetInputValidator` |
 | `data/remote` | DTOs `@Serializable` + data sources `Supabase*RemoteDataSource` |
 | `data/mapper` | DTO/Entity ↔ dominio |
 | `data/repository` | Implementaciones de las 12 interfaces de `domain/repository` |
@@ -160,10 +161,10 @@ sequenceDiagram
 (`Loading`/`ConfigError`/`SignedOut`/`SignedIn(needsOnboarding)`). `SpotterRoot` renderiza
 `LoginScreen`, `ConfigErrorScreen` o el `NavHost` autenticado según ese estado. Al pasar a
 `SignedIn` por primera vez en la sesión del proceso, sincroniza el `display_name` del perfil
-(`syncProfileDisplayName`) y agenda la sincronización del outbox. El cierre de sesión
-(`ProfileViewModel.onSignOutConfirmed`) cancela la alarma de descanso y el worker de sincronización
-y llama `AuthRepository.signOut()`; todavía no hay un `SignOutUseCase` que limpie Room/DataStore
-(FASE 5, ver "Planificado").
+(`syncProfileDisplayName`) y agenda la sincronización del outbox. El cierre de sesión invoca `SignOutUseCase` (FASE 5), que cancela la alarma de descanso y el
+worker de sincronización, borra Room entero (entrenamiento activo + outbox + caché), llama
+`AuthRepository.signOut()` y borra las preferencias por usuario (conserva unidad kg/lb). Si el
+borrado de Room falla, no cierra sesión y reprograma la sincronización para reintentar.
 
 `MainActivity` valida `AppConfig.isValid` antes de tocar el `SupabaseClient` (inyectado como
 `Lazy<SupabaseClient>` para no construirlo si la config es inválida) y muestra
@@ -173,7 +174,8 @@ y llama `AuthRepository.signOut()`; todavía no hay un `SignOutUseCase` que limp
 
 - Rutas `@Serializable` (`core/navigation/Routes.kt`) en un único `NavHost` (`SpotterNavHost`)
   dentro de la raíz autenticada. La barra inferior (`TopLevelDestination`: Dashboard, Rutinas,
-  Historial, Progreso, Perfil) solo se muestra en esos 5 destinos top-level.
+  Historial, Progreso, Perfil) se muestra en esos 5 destinos top-level (Dashboard, Historial y
+  Progreso implementados en FASE 5; ImportCodeRoute e ImportImageRoute siguen como `ComingSoonScreen`).
 - Los ViewModels con argumentos de ruta leen el `SavedStateHandle` directamente por clave
   (`RouteArgs`), no con `toRoute<T>()`: se verificó que `toRoute()` no decodifica argumentos cuando
   el `SavedStateHandle` no viene de un `NavBackStackEntry` real, lo que rompía los tests con fakes
@@ -312,22 +314,18 @@ cada una a fines de FASE 4:
 | A7 | Login Google: Credential Manager primario, PKCE de respaldo | Vigente |
 | A8 | Sesión cifrada Tink + Keystore | Vigente |
 | A9 | `AppResult`/`AppError` + `safeCall` | Vigente |
-| A10 | Gráfico propio en `Canvas` + `sh.calvin.reorderable` para drag & drop | El reordenamiento de ejercicios por día ya se usa en `RoutineDetailScreen`; el gráfico de progreso es FASE 5 |
+| A10 | Gráfico propio en `Canvas` + `sh.calvin.reorderable` para drag & drop | Reordenamiento en `RoutineDetailScreen` (FASE 3); gráfico de progreso en `feature/progress/LineChart` (FASE 5) |
 | A11 | Exportación nativa (PDF + JPEG de "historia") | No implementado (FASE 6) |
-| A12 | Peso siempre en kg, conversión solo de presentación | `FinishWorkoutUseCase` convierte a kg al guardar; la unidad queda fija por sesión; falta la UI de preferencia kg/lb (FASE 5) |
+| A12 | Peso siempre en kg, conversión solo de presentación | `FinishWorkoutUseCase` convierte a kg (FASE 4); UI de unidad kg/lb en `ProfileScreen` (FASE 5) |
 
-## Planificado (no implementado — fases 5 a 7)
+## Planificado (no implementado — fases 6 a 7)
 
 Documentado acá solo para dejar explícito qué falta; **nada de lo siguiente existe en el código
 hoy**. Ver `MIGRATION_PLAN.md` §10 para el detalle por fase.
 
-- **FASE 5:** Dashboard real, historial (lista y detalle de sesión), progreso (PRs, gráfico),
-  perfil completo (datos físicos, estadísticas, preferencia kg/lb), `SignOutUseCase` que limpie
-  Room/DataStore al cerrar sesión (y cancele alarma y sync por sí mismo). Decidir si el banner
-  "Entrenamiento en curso" se muda de `RoutinesScreen` al dashboard y si al finalizar un
-  entrenamiento se navega al dashboard con snackbar.
 - **FASE 6:** compartir/importar rutina por código, importación con IA desde imagen, exportación de
-  entrenamientos (PDF + imagen "historia").
+  entrenamientos (PDF + imagen "historia"). Rutas `ImportCodeRoute` e `ImportImageRoute` son
+  `ComingSoonScreen` por ahora.
 - **FASE 7:** endurecimiento de release y verificación en dispositivo/emulador real.
 
 ## Referencias
