@@ -13,4 +13,5 @@ object RouteArgs {
     const val DAY_NUMBER = "dayNumber"
     const val TEMPLATE_ID = "templateId"
     const val EXERCISE_ID = "exerciseId"
+    const val SESSION_ID = "sessionId"
 }

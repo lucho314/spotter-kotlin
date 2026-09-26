@@ -6,9 +6,7 @@ solo lectura: `E:\Spotter`), manteniendo el mismo backend Supabase sin cambios d
 
 ## Estado
 
-**FASES 1 a 4 de 7 implementadas y aprobadas** (revisión del 2026-09-26). Ver el plan completo
-en [`docs/MIGRATION_PLAN.md`](docs/MIGRATION_PLAN.md) y el detalle de arquitectura/estructura en
-`docs/`.
+**FASES 1 a 5 de 7 implementadas** (aprobadas FASES 1-4 el 2026-09-26; **FASE 5 implementada sin revisión independiente ni compilación del árbol Android**, solo tests de dominio/helpers). Ver el plan completo en [`docs/MIGRATION_PLAN.md`](docs/MIGRATION_PLAN.md) y el detalle de arquitectura/estructura en `docs/`.
 
 Implementado hoy:
 - Autenticación con Google (Credential Manager, con fallback a OAuth PKCE por navegador) y sesión
@@ -22,16 +20,22 @@ Implementado hoy:
 - Entrenamiento activo: inicio desde una rutina (con selector de día y diálogo si ya hay uno en
   curso), registro de series con estado persistido en Room (sobrevive a la muerte del proceso),
   temporizador de descanso con alarma y notificación "Descanso terminado" en segundo plano,
-  finalizar/descartar, y sincronización offline del outbox con WorkManager.
-- Perfil mínimo (identidad + cerrar sesión, que cancela la alarma y la sincronización).
+  finalizar/descartar con relay al dashboard, y sincronización offline del outbox con WorkManager.
+- **Historial, progreso, dashboard y perfil completo** (FASE 5): lista de entrenamientos con
+  paginación, detalle de sesión editable, gráfico de progreso por ejercicio, dashboard con
+  estadísticas de la semana y últimas rutinas, perfil con datos físicos editables, unidad kg/lb,
+  y `SignOutUseCase` con limpieza de Room y advertencia de entrenamientos sin sincronizar. Banner
+  "Entrenamiento en curso" compartido en Dashboard y Rutinas. Cinco use cases nuevos: `GetDashboardStatsUseCase`,
+  `GetExerciseProgressUseCase`, `GetProfileOverviewUseCase`, `UpdateProfileUseCase`, `SignOutUseCase`.
+- 458 tests unitarios totales (147 de dominio + helpers puros verificados sin Android SDK; el resto
+  de ViewModel/Room escritos pero sin compilar por falta de SDK).
 
-**Pendiente (fases 5 a 7, ver "Planificado" en `docs/*.md`):** historial, progreso, dashboard,
-perfil completo (datos físicos, preferencia kg/lb, `SignOutUseCase` con limpieza de Room),
-compartir/importar rutinas (código e IA), exportación de entrenamientos y endurecimiento de
-release. Las pantallas de Dashboard, Historial y Progreso hoy son placeholders (`ComingSoonScreen`);
-el banner "Entrenamiento en curso" vive por ahora en la pantalla de Rutinas.
+**Pendiente (fases 6 a 7, ver "Planificado" en `docs/*.md`):** compartir/importar rutinas (código
+e IA), exportación de entrenamientos y endurecimiento de release. Las rutas `ImportCodeRoute` e
+`ImportImageRoute` hoy son placeholders (`ComingSoonScreen`).
 
-No verificado todavía en un dispositivo/emulador real (solo build + tests unitarios).
+**FASE 5 sin verificación en dispositivo/emulador real ni compilación del árbol Android** — ver
+sección "Compilación" más abajo.
 
 ## Requisitos
 
@@ -63,14 +67,24 @@ No verificado todavía en un dispositivo/emulador real (solo build + tests unita
 
 ## Compilar, probar y empaquetar
 
-Desde `E:\Spoter Kotlin\` (con el JDK correcto en el PATH):
+Desde el directorio del proyecto (con el JDK de Android Studio en el PATH):
 
 ```bash
 ./gradlew assembleDebug            # APK debug
-./gradlew testDebugUnitTest         # tests unitarios (355 @Test tras FASE 4)
+./gradlew testDebugUnitTest         # tests unitarios (458 @Test totales, 147 verificados sin SDK)
 ./gradlew assembleRelease           # APK release con R8 (falla si faltan las claves de Supabase)
 ./gradlew assembleDebug testDebugUnitTest   # build + tests en un solo paso
 ```
+
+**⚠️ Nota sobre FASE 5:** el código de las pantallas de dashboard, historial, progreso y perfil
+completo está escrito pero **no ha sido compilado** porque el entorno de desarrollo donde se
+escribió no tiene Android SDK. Los 147 tests de dominio y helpers puros (cálculos, conversiones,
+validaciones) de FASE 5 fueron verificados en un arnés JVM independiente fuera del repo. Para
+compilar FASE 5 en producción, se requiere:
+1. Una máquina con `compileSdk 36`, `targetSdk 36`, `minSdk 26` y el JDK de Android Studio.
+2. Correr `./gradlew assembleDebug testDebugUnitTest` para verificar que los tipos, imports y
+   firmas de API de Compose/Navigation/Room son correctos.
+3. Si la compilación falla, el reporte incluye la lista de errores específicos.
 
 ## Seguridad
 

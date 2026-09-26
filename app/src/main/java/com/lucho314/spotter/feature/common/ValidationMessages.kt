@@ -26,4 +26,6 @@ fun ValidationReason.toMessageRes(): Int = when (this) {
     ValidationReason.EXERCISE_ALREADY_IN_ROUTINE -> R.string.validation_exercise_already_in_routine
     ValidationReason.DAY_ALREADY_EXISTS -> R.string.validation_day_already_exists
     ValidationReason.DAYS_MAX_REACHED -> R.string.validation_days_max_reached
+    ValidationReason.WORKOUT_REPS_RANGE -> R.string.validation_workout_reps_range
+    ValidationReason.AGE_RANGE -> R.string.validation_age_range
 }

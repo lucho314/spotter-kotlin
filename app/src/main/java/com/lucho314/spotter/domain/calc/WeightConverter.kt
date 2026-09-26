@@ -31,4 +31,8 @@ object WeightConverter {
         val value = BigDecimal.valueOf(fromKg(kg, unit)).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros()
         return value.toPlainString()
     }
+
+    /** Formats [kg] converted to [unit] with exactly one decimal, e.g. "102.5", "100.0" (1RM display). */
+    fun formatOneDecimal(kg: Double, unit: WeightUnit): String =
+        BigDecimal.valueOf(fromKg(kg, unit)).setScale(1, RoundingMode.HALF_UP).toPlainString()
 }

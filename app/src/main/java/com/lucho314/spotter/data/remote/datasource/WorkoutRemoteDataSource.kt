@@ -10,9 +10,13 @@ interface WorkoutRemoteDataSource {
     /** [from]/[to] are an inclusive 0-based row range (`range(from, to)`), 30 rows per page. */
     suspend fun getSessions(userId: String, from: Long, to: Long): List<WorkoutSessionDto>
     suspend fun getSession(sessionId: String): WorkoutSessionDto?
-    suspend fun updateSet(setId: String, weightKg: Double, reps: Int)
+
+    /** @return the number of rows actually updated (0 under RLS if [setId] isn't this caller's set). */
+    suspend fun updateSet(setId: String, weightKg: Double, reps: Int): Int
     suspend fun insertSet(dto: WorkoutSetInsertDto)
-    suspend fun deleteSet(setId: String)
+
+    /** @return the number of rows actually deleted (0 under RLS if [setId] isn't this caller's set). */
+    suspend fun deleteSet(setId: String): Int
 
     /** @return the number of rows actually deleted (0 if [sessionId] didn't match any row). */
     suspend fun deleteSession(sessionId: String): Int

@@ -40,4 +40,9 @@ class RouteArgsTest {
     fun `ExerciseDetailRoute has an exerciseId field matching RouteArgs`() {
         assertThat(fieldNames(ExerciseDetailRoute::class.java)).contains(RouteArgs.EXERCISE_ID)
     }
+
+    @Test
+    fun `SessionDetailRoute has a sessionId field matching RouteArgs`() {
+        assertThat(fieldNames(SessionDetailRoute::class.java)).contains(RouteArgs.SESSION_ID)
+    }
 }

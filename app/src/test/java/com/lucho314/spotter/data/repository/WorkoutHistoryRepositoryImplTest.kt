@@ -72,4 +72,38 @@ class WorkoutHistoryRepositoryImplTest {
 
         assertThat(result).isEqualTo(AppResult.Success(Unit))
     }
+
+    @Test
+    fun `getSessions(offset = 30, limit = 30) requests rows 30 to 59`() = runTest {
+        repository.getSessions("user-1", offset = 30, limit = 30)
+
+        assertThat(remote.getSessionsCalls.single()).isEqualTo(30L to 59L)
+    }
+
+    @Test
+    fun `updateSet with 0 rows affected maps to NotFound`() = runTest {
+        remote.updateSetRowsAffected = 0
+
+        val result = repository.updateSet("set-1", weightKg = 80.0, reps = 10)
+
+        assertThat(result).isEqualTo(AppResult.Failure(AppError.NotFound))
+    }
+
+    @Test
+    fun `updateSet with a positive row count succeeds`() = runTest {
+        remote.updateSetRowsAffected = 1
+
+        val result = repository.updateSet("set-1", weightKg = 80.0, reps = 10)
+
+        assertThat(result).isEqualTo(AppResult.Success(Unit))
+    }
+
+    @Test
+    fun `deleteSet with 0 rows affected maps to NotFound`() = runTest {
+        remote.deleteSetRowsAffected = 0
+
+        val result = repository.deleteSet("set-1")
+
+        assertThat(result).isEqualTo(AppResult.Failure(AppError.NotFound))
+    }
 }

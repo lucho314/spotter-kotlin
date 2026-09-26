@@ -4,6 +4,7 @@ import com.lucho314.spotter.domain.repository.ActiveWorkoutRepository
 import com.lucho314.spotter.domain.repository.AiImportRepository
 import com.lucho314.spotter.domain.repository.AuthRepository
 import com.lucho314.spotter.domain.repository.ExerciseRepository
+import com.lucho314.spotter.domain.repository.LocalDataRepository
 import com.lucho314.spotter.domain.repository.PendingWorkoutRepository
 import com.lucho314.spotter.domain.repository.PreferencesRepository
 import com.lucho314.spotter.domain.repository.ProfileRepository
@@ -69,4 +70,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindPendingWorkoutRepository(impl: PendingWorkoutRepositoryImpl): PendingWorkoutRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalDataRepository(impl: LocalDataRepositoryImpl): LocalDataRepository
 }

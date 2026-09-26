@@ -71,7 +71,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun WorkoutScreen(
-    onFinished: () -> Unit,
+    onFinished: (online: Boolean) -> Unit,
     onDiscarded: () -> Unit,
     viewModel: WorkoutViewModel = hiltViewModel(),
 ) {
@@ -93,15 +93,10 @@ fun WorkoutScreen(
             }
 
             is WorkoutEvent.ActionFailed -> scope.launch { snackbarHostState.showSnackbar(context.getString(event.messageRes)) }
-            is WorkoutEvent.Finished -> scope.launch {
-                val message = if (event.online) {
-                    context.getString(R.string.workout_finished_online)
-                } else {
-                    context.getString(R.string.workout_finished_offline)
-                }
-                snackbarHostState.showSnackbar(message)
-                onFinished()
-            }
+            // No snackbar here: the Dashboard shows it after the relay (`SpotterNavHost`'s
+            // `KEY_WORKOUT_FINISHED_ONLINE`) once this screen has already been popped, since a
+            // snackbar attached to this screen's own SnackbarHostState would disappear with it.
+            is WorkoutEvent.Finished -> onFinished(event.online)
 
             WorkoutEvent.Discarded -> onDiscarded()
             WorkoutEvent.NoActiveWorkout -> onDiscarded()

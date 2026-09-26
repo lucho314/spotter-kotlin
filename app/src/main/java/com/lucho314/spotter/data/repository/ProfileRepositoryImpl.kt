@@ -2,6 +2,7 @@ package com.lucho314.spotter.data.repository
 
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.common.notNullOrNotFound
+import com.lucho314.spotter.core.common.requirePositiveOrNotFound
 import com.lucho314.spotter.core.network.safeCall
 import com.lucho314.spotter.data.mapper.toDateString
 import com.lucho314.spotter.data.mapper.toDomain
@@ -27,9 +28,8 @@ class ProfileRepositoryImpl @Inject constructor(
         heightCm: Int?,
         birthDate: LocalDate?,
         goal: String?,
-    ): AppResult<Unit> = safeCall {
-        remote.updatePhysical(userId, weightKg, heightCm, birthDate?.toDateString(), goal)
-    }
+    ): AppResult<Unit> =
+        safeCall { remote.updatePhysical(userId, weightKg, heightCm, birthDate?.toDateString(), goal) }.requirePositiveOrNotFound()
 
     override suspend fun countActiveRoutines(userId: String): AppResult<Int> = safeCall {
         remote.countActiveRoutines(userId)

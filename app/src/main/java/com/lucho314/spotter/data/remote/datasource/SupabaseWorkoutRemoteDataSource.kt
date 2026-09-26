@@ -47,22 +47,24 @@ class SupabaseWorkoutRemoteDataSource @Inject constructor(
             filter { eq("id", sessionId) }
         }.decodeSingleOrNull()
 
-    override suspend fun updateSet(setId: String, weightKg: Double, reps: Int) {
+    override suspend fun updateSet(setId: String, weightKg: Double, reps: Int): Int =
         postgrest.from("workout_sets").update({
             set("weight_kg", weightKg)
             set("reps", reps)
         }) {
+            select()
             filter { eq("id", setId) }
-        }
-    }
+        }.decodeList<IdDto>().size
 
     override suspend fun insertSet(dto: WorkoutSetInsertDto) {
         postgrest.from("workout_sets").insert(dto)
     }
 
-    override suspend fun deleteSet(setId: String) {
-        postgrest.from("workout_sets").delete { filter { eq("id", setId) } }
-    }
+    override suspend fun deleteSet(setId: String): Int =
+        postgrest.from("workout_sets").delete {
+            select()
+            filter { eq("id", setId) }
+        }.decodeList<IdDto>().size
 
     override suspend fun deleteSession(sessionId: String): Int =
         postgrest.from("workout_sessions").delete {

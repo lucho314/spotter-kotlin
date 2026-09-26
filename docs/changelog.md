@@ -6,6 +6,75 @@ ciclo de revisión está en `MIGRATION_PLAN.md` §10 y en `review_carryover.md`.
 
 ---
 
+## [FASE 5] — 2026-09-26 — IMPLEMENTADA (sin revisión independiente, sin compilación de Android)
+
+Historial, progreso, dashboard y perfil completo.
+
+- **Historial:** lista paginada (`HistoryScreen`/`ViewModel`, 30 por página, "Cargar más"), banner
+  de pendientes y de fallidos (con "Reintentar" y "Descartar"), long-press para eliminar sesión.
+  Detalle de sesión (`SessionDetailScreen`/`ViewModel`): bloques por ejercicio, edición por fila
+  con validación, agregar serie, borrar con confirmación.
+- **Progreso:** `ProgressScreen`/`ViewModel` con tarjetas de records personales (PR: peso × reps,
+  1RM con 1 decimal), chips por ejercicio, gráfico de 1RM estimado por sesión en `Canvas`
+  (propio, sin dependencias nuevas).
+- **Dashboard:** `DashboardScreen`/`ViewModel` con saludo según la hora, estadísticas (sesiones
+  esta semana, última sesión, último PR), opción "Iniciar Entrenamiento" o banner de
+  entrenamiento en curso (compartido con Rutinas), top 3 rutinas ordenadas por día de la semana,
+  chip de entrenamientos pendientes, pull-to-refresh.
+- **Perfil completo:** `ProfileScreen`/`ViewModel` reescrita con datos físicos editables (peso en
+  kg/lb, altura, fecha de nacimiento con autoformato "DD/MM/AAAA"), objetivo con diálogo de
+  selección, unidad de peso con `SegmentedButton`, y cierre de sesión con advertencia si hay
+  entrenamientos sin sincronizar o en curso.
+- **Use cases nuevos:** `GetDashboardStatsUseCase` (sesiones de la semana, última sesión, último PR),
+  `GetExerciseProgressUseCase` (puntos de progreso agrupados por sesión), `GetProfileOverviewUseCase`
+  (perfil + estadísticas), `UpdateProfileUseCase` (validación de datos físicos), `SignOutUseCase`
+  (limpieza: cancela alarma/worker, borra Room entero, calla `authRepository.signOut()`, borra
+  preferencias por usuario conservando unidad).
+- **LocalDataRepository:** interfaz nueva para borrado atómico de todas las tablas Room
+  (`active_*`, `pending_*`, `cached_payload`), inyectada en `SignOutUseCase`.
+- **Componentes compartidos:** `StatCard` (etiqueta + valor), `LineChart` (Canvas con ejes,
+  puntos, etiquetas), `LineChartGeometry` (cálculos de posición en Canvas), `ActiveWorkoutBanner`
+  (compartida Dashboard-Rutinas), `SectionState` (sealed interface Loading/Loaded/Error),
+  `DateFormats` (fechas localizadas es-AR), `BirthDateInput` (autoformato de fecha).
+- **Validación nueva:** `ValidationReason.WORKOUT_REPS_RANGE` y `AGE_RANGE`, `SetInputValidator`
+  (validador puro de peso + reps para series).
+- **Actualización de firmas:**
+  - `WorkoutHistoryRepository.getSessions()` cambia a offset/limit (en lugar de page/pageSize).
+  - `updateSet`, `deleteSet` devuelven `Int` (filas afectadas) y aplican `requirePositiveOrNotFound()`
+    (contra el no-op silencioso de RLS).
+  - `ProfileRepository.updatePhysical()` devuelve `Int` con el mismo patrón.
+  - `WorkoutScreen(onFinished: (online: Boolean) -> Unit)` para el relay del snackbar.
+- **Navegación:** relay de `workout_finished_online` flag en `SavedStateHandle` del
+  `DashboardRoute`; `WorkoutViewModel` agrega flag `closing` para evitar la carrera `NoActiveWorkout`
+  mientras finaliza. Helper `NavController.navigateToTopLevel()` para los cambios de tab.
+- **Strings nuevos:** 50+ en `values/strings.xml` (saludo, sesiones, PR, perfil, validación,
+  historial, progreso).
+- **Tests nuevos y actualizados:** 458 @Test totales; 147 de dominio + helpers puros verificados
+  sin SDK (arnés JVM independiente); resto de ViewModel/Room/UI escritos pero sin compilar.
+  Tests nuevos: `GetDashboardStatsUseCaseTest`, `GetExerciseProgressUseCaseTest`,
+  `GetProfileOverviewUseCaseTest`, `UpdateProfileUseCaseTest`, `SignOutUseCaseTest`,
+  `SetInputValidatorTest`, `HistoryViewModelTest`, `SessionDetailViewModelTest`,
+  `ProgressViewModelTest`, `DashboardViewModelTest`, `DashboardFormattersTest`,
+  `ProfileViewModelTest` (reescrita), `WorkoutViewModelTest` (caso `closing`),
+  `LineChartGeometryTest`, `BirthDateInputTest`, `SpotterDateFormatsTest`, y más.
+
+**Desviaciones registradas** (ver `MIGRATION_PLAN.md` §10): `DashboardStats` con `AppResult` por
+sección sin `pendingSyncCount`; `getSessions` por offset/limit; `updateSet`/`deleteSet`/`updatePhysical`
+cuentan filas; `SignOutUseCase` borra Room **antes** de `signOut` e inyecta interfaz `LocalDataRepository`;
+`risk()` devuelve unsynced count + hasActiveWorkout; si falla el borrado, no cierra sesión y
+reprograma sync; banner en Dashboard **y** Rutinas; finalizar navega al Dashboard por relay;
+`WorkoutViewModel` agrega flag `closing` para evitar carrera; historial con "Cargar más" (no scroll
+infinito); perfil con campo vacío borra datos; chips de progreso sin preselección; onboarding
+reaparece tras sign-out.
+
+**Compilación:** FASE 5 está escrita pero no compilada en esta sesión (sin Android SDK disponible).
+147 tests de dominio y helpers puros (cálculos, conversiones, validaciones, formateos) fueron
+verificados en un arnés JVM independiente fuera del repo. Para compilar: requiere machine con
+compileSdk 36 y ejecutar `./gradlew assembleDebug testDebugUnitTest` — si falla, reportar errores
+específicos de tipo/import/firma de API.
+
+---
+
 ## [Sin versión] — 2026-09-26 — Fix post-FASE 4: navegación al entrenamiento
 
 - **Bug:** `SpotterNavHost` envolvía `RoutineDetailScreen.onStartWorkoutClick` con
@@ -177,9 +246,8 @@ sin depender de esa corrección. Detalle completo de los hallazgos B1-B6 en `MIG
 
 ---
 
-## Planificado (fases 5 a 7, no iniciadas)
+## Planificado (fases 6 a 7, no iniciadas)
 
 Ver `MIGRATION_PLAN.md` §10 y la sección "Planificado" de `arquitectura.md`/`componentes.md` para
-el detalle. Resumen: historial, progreso, dashboard, perfil completo (FASE 5); compartir/importar
-rutinas (código e IA) y exportación de entrenamientos (FASE 6); endurecimiento de release y
-verificación en dispositivo real (FASE 7).
+el detalle. Resumen: compartir/importar rutinas (código e IA) y exportación de entrenamientos
+(FASE 6); endurecimiento de release y verificación en dispositivo real (FASE 7).

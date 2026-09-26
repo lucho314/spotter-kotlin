@@ -84,6 +84,16 @@ interface ActiveWorkoutDao {
     @Query("DELETE FROM active_session WHERE id = :id")
     suspend fun deleteSession(id: String)
 
+    /** Sign-out cleanup ([com.lucho314.spotter.domain.repository.LocalDataRepository]): children first, explicit rather than relying on the FK cascade pragma. */
+    @Query("DELETE FROM active_set")
+    suspend fun deleteAllSets()
+
+    @Query("DELETE FROM active_exercise")
+    suspend fun deleteAllExercises()
+
+    @Query("DELETE FROM active_session")
+    suspend fun deleteAllSessions()
+
     /**
      * Inserts a whole session snapshot: the session row, its exercises, and each exercise's sets.
      * Aborts (throwing) without inserting anything if `session.userId` already has an active

@@ -4,6 +4,7 @@ import com.lucho314.spotter.core.common.AppError
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.common.IdGenerator
 import com.lucho314.spotter.core.common.notNullOrNotFound
+import com.lucho314.spotter.core.common.requirePositiveOrNotFound
 import com.lucho314.spotter.core.network.safeCall
 import com.lucho314.spotter.data.mapper.toDetail
 import com.lucho314.spotter.data.mapper.toDomain
@@ -27,18 +28,17 @@ class WorkoutHistoryRepositoryImpl @Inject constructor(
     private val idGenerator: IdGenerator,
 ) : WorkoutHistoryRepository {
 
-    override suspend fun getSessions(userId: String, page: Int, pageSize: Int): AppResult<List<WorkoutSessionSummary>> = safeCall {
-        val from = page.toLong() * pageSize
-        val to = from + pageSize - 1
+    override suspend fun getSessions(userId: String, offset: Int, limit: Int): AppResult<List<WorkoutSessionSummary>> = safeCall {
+        val from = offset.toLong()
+        val to = from + limit - 1
         remote.getSessions(userId, from, to).map { it.toSummary() }
     }
 
     override suspend fun getSession(sessionId: String): AppResult<WorkoutSessionDetail> =
         safeCall { remote.getSession(sessionId)?.toDetail() }.notNullOrNotFound()
 
-    override suspend fun updateSet(setId: String, weightKg: Double, reps: Int): AppResult<Unit> = safeCall {
-        remote.updateSet(setId, weightKg, reps)
-    }
+    override suspend fun updateSet(setId: String, weightKg: Double, reps: Int): AppResult<Unit> =
+        safeCall { remote.updateSet(setId, weightKg, reps) }.requirePositiveOrNotFound()
 
     override suspend fun addSet(sessionId: String, exerciseId: Int, setNumber: Int, weightKg: Double, reps: Int, completedAt: Instant): AppResult<Unit> = safeCall {
         remote.insertSet(
@@ -55,9 +55,8 @@ class WorkoutHistoryRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun deleteSet(setId: String): AppResult<Unit> = safeCall {
-        remote.deleteSet(setId)
-    }
+    override suspend fun deleteSet(setId: String): AppResult<Unit> =
+        safeCall { remote.deleteSet(setId) }.requirePositiveOrNotFound()
 
     override suspend fun deleteSession(sessionId: String): AppResult<Unit> =
         when (val result = safeCall { remote.deleteSession(sessionId) }) {

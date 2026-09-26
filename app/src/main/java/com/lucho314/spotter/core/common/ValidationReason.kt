@@ -23,4 +23,10 @@ enum class ValidationReason {
 
     /** All 7 weekday slots are already taken (by a real day or by an orphaned exercise's `day_number`). */
     DAYS_MAX_REACHED,
+
+    /** 1..200 ([com.lucho314.spotter.domain.calc.WeightInputParser.parseReps]); [REPS_RANGE] is 1..100, the routines' target reps. */
+    WORKOUT_REPS_RANGE,
+
+    /** Age (whole years) must be in 10..100. */
+    AGE_RANGE,
 }
