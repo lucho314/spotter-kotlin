@@ -52,6 +52,7 @@ import com.lucho314.spotter.core.designsystem.theme.Spacing
 import com.lucho314.spotter.core.designsystem.theme.SpotterColors
 import com.lucho314.spotter.domain.calc.SpanishWeekdays
 import com.lucho314.spotter.domain.model.RoutineSummary
+import com.lucho314.spotter.feature.common.ActiveWorkoutBanner
 import com.lucho314.spotter.feature.common.ObserveAsEvents
 import kotlinx.coroutines.launch
 
@@ -224,20 +225,6 @@ private fun RoutinesHeader(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-    }
-}
-
-/**
- * "Entrenamiento en curso · Continuar" (RN bug #6, migration plan section 10 phase 4: there was no
- * way back into an active workout after closing the app). This is `feature/dashboard/`'s banner
- * (not implemented until phase 5) living here instead, since Rutinas is the closest already-shipped
- * top-level screen.
- */
-@Composable
-private fun ActiveWorkoutBanner(routineName: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    SpotterCard(onClick = onClick, modifier = modifier) {
-        Text(text = stringResource(R.string.routines_active_workout_title), style = MaterialTheme.typography.titleSmall, color = SpotterColors.PrimaryContainer)
-        Text(text = routineName, style = MaterialTheme.typography.bodyMedium, color = SpotterColors.OnSurfaceVariant)
     }
 }
 

@@ -136,6 +136,16 @@ class WorkoutViewModel @Inject constructor(
     private var lastRestEndsAtNotified: Instant? = null
     private var notifiedNoActiveWorkout = false
 
+    /**
+     * `true` while [onFinish] or [onDiscard] is in flight. [FinishWorkoutUseCase] and
+     * [DiscardWorkoutUseCase] both clear Room's active session as part of finishing/discarding, so
+     * without this guard the very next [uiState] emission would see `workout == null` and fire
+     * [WorkoutEvent.NoActiveWorkout] - racing (and sometimes winning against) the [WorkoutEvent.Finished]/
+     * [WorkoutEvent.Discarded] event this same call already sends, which made the screen navigate
+     * back via the wrong path and drop the finish snackbar (review carry-over 3).
+     */
+    private var closing = false
+
     val uiState: StateFlow<WorkoutUiState> = combine(
         activeWorkoutRepository.observeActive(userId),
         ticker,
@@ -145,7 +155,7 @@ class WorkoutViewModel @Inject constructor(
         if (workout != null) {
             notifiedNoActiveWorkout = false
             maybeHandleRestFinished(workout, now)
-        } else if (!notifiedNoActiveWorkout) {
+        } else if (!notifiedNoActiveWorkout && !closing) {
             notifiedNoActiveWorkout = true
             eventChannel.trySend(WorkoutEvent.NoActiveWorkout)
         }
@@ -249,23 +259,28 @@ class WorkoutViewModel @Inject constructor(
     }
 
     fun onFinish() {
+        closing = true
         viewModelScope.launch {
             flushAllDrafts()
-            val sessionId = uiState.value.workout?.sessionId ?: return@launch
+            val sessionId = uiState.value.workout?.sessionId ?: run { closing = false; return@launch }
             when (val result = finishWorkoutUseCase(userId, sessionId)) {
                 is AppResult.Success -> when (result.value) {
                     FinishResult.Saved -> eventChannel.send(WorkoutEvent.Finished(online = networkMonitor.isOnline.first()))
                     FinishResult.NothingToSave -> eventChannel.send(WorkoutEvent.Discarded)
                 }
 
-                is AppResult.Failure -> eventChannel.send(WorkoutEvent.ActionFailed(result.error.toMessageRes()))
+                is AppResult.Failure -> {
+                    closing = false
+                    eventChannel.send(WorkoutEvent.ActionFailed(result.error.toMessageRes()))
+                }
             }
         }
     }
 
     fun onDiscard() {
+        closing = true
         viewModelScope.launch {
-            val sessionId = uiState.value.workout?.sessionId ?: return@launch
+            val sessionId = uiState.value.workout?.sessionId ?: run { closing = false; return@launch }
             discardWorkoutUseCase(sessionId)
             eventChannel.send(WorkoutEvent.Discarded)
         }

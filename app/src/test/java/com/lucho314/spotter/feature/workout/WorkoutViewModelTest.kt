@@ -152,4 +152,29 @@ class WorkoutViewModelTest {
         }
         assertThat(activeWorkoutRepository.getActive(USER.id)!!.rest).isNull()
     }
+
+    /**
+     * Review carry-over 3: finishing moves the session out of Room ([FinishWorkoutUseCase]'s
+     * `moveToOutbox`), which - without the `closing` guard - would otherwise also fire
+     * `WorkoutEvent.NoActiveWorkout` right after `Finished`, racing the nav host's relay.
+     */
+    @Test
+    fun `finishing with a completed set emits only Finished, never NoActiveWorkout`() = runTest(testDispatcher) {
+        val workout = workout().let { w ->
+            w.copy(exercises = w.exercises.map { it.copy(sets = it.sets.map { set -> set.copy(completedAt = Instant.ofEpochSecond(5)) }) })
+        }
+        activeWorkoutRepository.start(workout)
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.events.test {
+            vm.onFinish()
+            runCurrent()
+            assertThat(awaitItem()).isEqualTo(WorkoutEvent.Finished(true))
+
+            advanceTimeBy(2_000)
+            runCurrent()
+            expectNoEvents()
+        }
+    }
 }

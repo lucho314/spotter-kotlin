@@ -15,8 +15,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.lucho314.spotter.feature.auth.OnboardingScreen
 import com.lucho314.spotter.feature.common.ComingSoonScreen
+import com.lucho314.spotter.feature.dashboard.DashboardScreen
 import com.lucho314.spotter.feature.exercise.ExerciseDetailScreen
+import com.lucho314.spotter.feature.history.detail.SessionDetailScreen
+import com.lucho314.spotter.feature.history.list.HistoryScreen
 import com.lucho314.spotter.feature.profile.ProfileScreen
+import com.lucho314.spotter.feature.progress.ProgressScreen
 import com.lucho314.spotter.feature.routines.addexercise.AddExerciseScreen
 import com.lucho314.spotter.feature.routines.detail.RoutineDetailScreen
 import com.lucho314.spotter.feature.routines.edit.RoutineEditScreen
@@ -26,9 +30,12 @@ import com.lucho314.spotter.feature.templates.detail.TemplateDetailScreen
 import com.lucho314.spotter.feature.templates.list.TemplatesScreen
 import com.lucho314.spotter.feature.workout.WorkoutScreen
 
-/** Nav-result relay keys (see the "returning a result" pattern in [SpotterNavHost]'s two `getBackStackEntry`/`previousBackStackEntry` usages below). */
+/** Nav-result relay keys (see the "returning a result" pattern in [SpotterNavHost]'s `getBackStackEntry`/`previousBackStackEntry` usages below). */
 private const val KEY_ROUTINES_CREATED_FROM_TEMPLATE = "routines_created_from_template"
 private const val KEY_ADDED_EXERCISE_NAME = "added_exercise_name"
+
+/** `true`/`false` (online/offline) right after finishing a workout, relayed to `DashboardRoute`'s own `SavedStateHandle` (carry-over 3). */
+private const val KEY_WORKOUT_FINISHED_ONLINE = "workout_finished_online"
 
 /**
  * [androidx.lifecycle.compose.dropUnlessResumed] only wraps a no-arg `() -> Unit` (it's meant for
@@ -61,8 +68,8 @@ fun NavController.navigateToWorkout() {
 
 /**
  * Single `NavHost` for the authenticated app. Top-level destinations, routines/templates/exercise
- * detail (phase 3) and the active workout (phase 4) are wired up; dashboard, history, progress,
- * import and the AI import flow are still placeholders until their feature phase lands (see
+ * detail (phase 3), the active workout (phase 4) and dashboard/history/progress (phase 5) are wired
+ * up; import and the AI import flow are still placeholders until phase 6 (see
  * MIGRATION_PLAN.md section 10).
  *
  * Two different kinds of callback are wired up here, deliberately guarded differently:
@@ -70,8 +77,9 @@ fun NavController.navigateToWorkout() {
  *   or [dropUnlessResumed1]/[dropUnlessResumed2] (parameterized), so a double-tap or a tap racing
  *   a back gesture can't fire `navigate()` twice.
  * - **Async-operation results** (`onSaved`, `onArchived`, `onExerciseAdded`, `onRoutinesCreated`,
- *   `RoutineDetailScreen`'s `onOpenWorkout`, Onboarding's `onDone`): driven by a ViewModel event
- *   that can legitimately arrive while this screen is backgrounded (mid network call). These are **not** guarded here - see
+ *   `RoutineDetailScreen`'s `onOpenWorkout`, Onboarding's `onDone`, `WorkoutScreen`'s `onFinished`):
+ *   driven by a ViewModel event that can legitimately arrive while this screen is backgrounded (mid
+ *   network call). These are **not** guarded here - see
  *   `com.lucho314.spotter.feature.common.ObserveAsEvents`'s KDoc: guarding the callback instead of
  *   the event *collection* silently drops the result forever (review bug), since the event has
  *   already been consumed from the channel by the time the guard runs.
@@ -92,7 +100,24 @@ fun SpotterNavHost(
                 },
             )
         }
-        composable<DashboardRoute> { ComingSoonScreen() }
+        composable<DashboardRoute> { entry ->
+            val lifecycleOwner = LocalLifecycleOwner.current
+            // See the analogous `getStateFlow`/`remember(entry)` usage (and its KDoc) on
+            // RoutinesRoute below.
+            val finishedWorkoutOnlineFlow = remember(entry) {
+                entry.savedStateHandle.getStateFlow<Boolean?>(KEY_WORKOUT_FINISHED_ONLINE, null)
+            }
+            DashboardScreen(
+                onStartWorkoutClick = dropUnlessResumed { navController.navigateToTopLevel(TopLevelDestination.ROUTINES) },
+                onSeeAllRoutinesClick = dropUnlessResumed { navController.navigateToTopLevel(TopLevelDestination.ROUTINES) },
+                onPendingClick = dropUnlessResumed { navController.navigateToTopLevel(TopLevelDestination.HISTORY) },
+                onCreateRoutineClick = dropUnlessResumed { navController.navigate(RoutineEditRoute()) },
+                onRoutineClick = lifecycleOwner.dropUnlessResumed1 { routineId -> navController.navigate(RoutineDetailRoute(routineId)) },
+                onResumeWorkoutClick = dropUnlessResumed { navController.navigateToWorkout() },
+                finishedWorkoutOnline = finishedWorkoutOnlineFlow,
+                onFinishedWorkoutConsumed = { entry.savedStateHandle.remove<Boolean>(KEY_WORKOUT_FINISHED_ONLINE) },
+            )
+        }
         composable<RoutinesRoute> { entry ->
             val lifecycleOwner = LocalLifecycleOwner.current
             // `getStateFlow` (observed reactively), not a one-off `get()`: this entry's composition
@@ -195,12 +220,29 @@ fun SpotterNavHost(
         composable<ExerciseDetailRoute> {
             ExerciseDetailScreen(onBack = dropUnlessResumed { navController.popBackStack() })
         }
-        composable<HistoryRoute> { ComingSoonScreen() }
-        composable<ProgressRoute> { ComingSoonScreen() }
+        composable<HistoryRoute> {
+            val lifecycleOwner = LocalLifecycleOwner.current
+            HistoryScreen(onSessionClick = lifecycleOwner.dropUnlessResumed1 { sessionId -> navController.navigate(SessionDetailRoute(sessionId)) })
+        }
+        composable<SessionDetailRoute> {
+            SessionDetailScreen(onBack = dropUnlessResumed { navController.popBackStack() })
+        }
+        composable<ProgressRoute> { ProgressScreen() }
         composable<ProfileRoute> { ProfileScreen() }
         composable<WorkoutRoute> {
             WorkoutScreen(
-                onFinished = { navController.popBackStack() },
+                // Unguarded: driven by `WorkoutEvent.Finished`/`Discarded`, not a user click - see
+                // this file's KDoc on async-operation results.
+                onFinished = { online ->
+                    val dashboardEntry = runCatching { navController.getBackStackEntry(DashboardRoute) }.getOrNull()
+                    if (dashboardEntry != null) {
+                        dashboardEntry.savedStateHandle[KEY_WORKOUT_FINISHED_ONLINE] = online
+                        navController.popBackStack(DashboardRoute, inclusive = false)
+                    } else {
+                        navController.navigate(DashboardRoute) { popUpTo(WorkoutRoute) { inclusive = true } }
+                        navController.currentBackStackEntry?.savedStateHandle?.set(KEY_WORKOUT_FINISHED_ONLINE, online)
+                    }
+                },
                 onDiscarded = { navController.popBackStack() },
             )
         }

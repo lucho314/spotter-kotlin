@@ -18,7 +18,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lucho314.spotter.core.designsystem.component.LoadingState
@@ -28,6 +27,7 @@ import com.lucho314.spotter.core.navigation.ImportCodeRoute
 import com.lucho314.spotter.core.navigation.OnboardingRoute
 import com.lucho314.spotter.core.navigation.SpotterNavHost
 import com.lucho314.spotter.core.navigation.TopLevelDestination
+import com.lucho314.spotter.core.navigation.navigateToTopLevel
 import com.lucho314.spotter.core.navigation.navigateToWorkout
 import com.lucho314.spotter.domain.model.ShareCode
 import com.lucho314.spotter.feature.auth.LoginScreen
@@ -83,15 +83,7 @@ private fun AuthenticatedApp(
                     TopLevelDestination.entries.forEach { destination ->
                         NavigationBarItem(
                             selected = destination == currentTopLevel,
-                            onClick = {
-                                navController.navigate(destination.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onClick = { navController.navigateToTopLevel(destination) },
                             icon = { Icon(destination.icon, contentDescription = null) },
                             label = { Text(stringResource(destination.labelRes)) },
                         )

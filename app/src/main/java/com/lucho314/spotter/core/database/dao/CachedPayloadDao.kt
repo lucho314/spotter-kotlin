@@ -23,4 +23,8 @@ interface CachedPayloadDao {
     /** Deletes every row whose key starts with [prefix] (e.g. clearing all `routine:*` entries). */
     @Query("DELETE FROM cached_payload WHERE `key` LIKE :prefix || '%'")
     suspend fun deleteByPrefix(prefix: String)
+
+    /** Sign-out cleanup ([com.lucho314.spotter.domain.repository.LocalDataRepository]). */
+    @Query("DELETE FROM cached_payload")
+    suspend fun deleteAll()
 }

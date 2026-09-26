@@ -19,6 +19,7 @@ class FakePendingWorkoutRepository : PendingWorkoutRepository {
     val deletedIds = mutableListOf<String>()
     val markedFailedIds = mutableListOf<String>()
     val attemptedIds = mutableListOf<String>()
+    val resetIds = mutableListOf<String>()
 
     fun seed(workout: PendingWorkout) {
         workouts[workout.id] = workout
@@ -51,6 +52,7 @@ class FakePendingWorkoutRepository : PendingWorkoutRepository {
     }
 
     override suspend fun resetToPending(id: String) {
+        resetIds += id
         workouts[id]?.let { workouts[id] = it.copy(status = PendingStatus.PENDING, lastError = null) }
         recompute()
     }

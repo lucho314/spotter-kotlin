@@ -259,4 +259,124 @@
         <item quantity="one">%1$d serie registrada</item>
         <item quantity="other">%1$d series registradas</item>
     </plurals>
+
+    <!-- Units / generic (FASE 5) -->
+    <string name="unit_kg">kg</string>
+    <string name="unit_lb">lb</string>
+    <string name="weight_with_unit">%1$s %2$s</string>
+    <string name="generic_not_available">—</string>
+
+    <!-- Validation reasons (FASE 5) -->
+    <string name="validation_workout_reps_range">Las repeticiones deben estar entre 1 y 200.</string>
+    <string name="validation_age_range">La edad debe estar entre 10 y 100 años.</string>
+
+    <!-- Shared plural: pending/failed outbox count (dashboard chip, history banner). -->
+    <plurals name="pending_sync_count">
+        <item quantity="one">%1$d entrenamiento pendiente de sincronizar</item>
+        <item quantity="other">%1$d entrenamientos pendientes de sincronizar</item>
+    </plurals>
+
+    <!-- Dashboard -->
+    <string name="dashboard_greeting_morning">BUEN DÍA</string>
+    <string name="dashboard_greeting_afternoon">BUENAS TARDES</string>
+    <string name="dashboard_greeting_night">BUENAS NOCHES</string>
+    <string name="dashboard_stat_this_week">ESTA SEMANA</string>
+    <plurals name="dashboard_sessions_count">
+        <item quantity="one">%1$d sesión</item>
+        <item quantity="other">%1$d sesiones</item>
+    </plurals>
+    <string name="dashboard_stat_last_session">ÚLTIMA SESIÓN</string>
+    <string name="dashboard_last_session_today">Hoy</string>
+    <string name="dashboard_last_session_yesterday">Ayer</string>
+    <plurals name="dashboard_last_session_days_ago">
+        <item quantity="one">Hace %1$d día</item>
+        <item quantity="other">Hace %1$d días</item>
+    </plurals>
+    <string name="dashboard_last_session_none">-</string>
+    <string name="dashboard_start_workout">Iniciar Entrenamiento</string>
+    <string name="dashboard_latest_pr">ÚLTIMO PR</string>
+    <string name="dashboard_latest_pr_value">%1$s %2$s (1RM est.)</string>
+    <string name="dashboard_latest_pr_empty">Todavía no registraste PRs</string>
+    <string name="dashboard_my_routines">Mis Rutinas</string>
+    <string name="dashboard_see_all">Ver todas</string>
+    <string name="dashboard_empty_title">¡Empezá ahora!</string>
+    <string name="dashboard_empty_description">Creá tu primera rutina para empezar a entrenar.</string>
+    <string name="dashboard_section_error">No se pudo cargar</string>
+
+    <!-- History -->
+    <string name="history_title">Historial</string>
+    <string name="history_free_workout">Entrenamiento libre</string>
+    <string name="history_empty_title">Todavía no registraste entrenamientos</string>
+    <string name="history_empty_description">Cuando termines un entrenamiento, va a aparecer acá.</string>
+    <string name="history_load_more">Cargar más</string>
+    <string name="history_delete_confirm_title">Eliminar entrenamiento</string>
+    <string name="history_delete_confirm_message">¿Eliminás el entrenamiento del %1$s? No se puede deshacer.</string>
+    <string name="history_session_deleted">Entrenamiento eliminado</string>
+    <string name="history_failed_title">No se pudieron sincronizar</string>
+    <string name="history_failed_discard">Descartar</string>
+    <string name="history_failed_discard_confirm_title">Descartar entrenamiento</string>
+    <string name="history_failed_discard_confirm_message">El entrenamiento del %1$s no se subió y se va a borrar de este dispositivo. ¿Descartarlo?</string>
+
+    <!-- Session detail -->
+    <string name="session_detail_duration">DURACIÓN</string>
+    <string name="session_detail_volume">VOLUMEN</string>
+    <string name="session_detail_sets">SERIES</string>
+    <string name="session_detail_unknown_exercise">Ejercicio</string>
+    <string name="session_detail_edit_set_title">Editar serie %1$d</string>
+    <string name="session_detail_weight_label">Peso (%1$s)</string>
+    <string name="session_detail_delete_set_confirm_title">Eliminar serie</string>
+    <string name="session_detail_delete_set_confirm_message">¿Eliminás la serie %1$d de %2$s?</string>
+    <string name="session_detail_edit_set_cd">Editar serie</string>
+    <string name="session_detail_delete_set_cd">Eliminar serie</string>
+    <string name="session_detail_warmup">Calentamiento</string>
+
+    <!-- Progress -->
+    <string name="progress_title">Progreso</string>
+    <string name="progress_prs_title">Records Personales</string>
+    <string name="progress_pr_1rm">1RM: %1$s %2$s</string>
+    <string name="progress_pr_badge">PR: %1$s %2$s</string>
+    <string name="progress_exercise_unknown">Ejercicio</string>
+    <string name="progress_empty_title">Todavía no tenés records</string>
+    <string name="progress_empty_description">Completá entrenamientos para ver tu progreso.</string>
+    <string name="progress_select_exercise">Elegí un ejercicio para ver su evolución</string>
+    <string name="progress_chart_title">1RM estimado por sesión</string>
+    <string name="progress_chart_empty">Todavía no hay datos para este ejercicio</string>
+    <string name="progress_trophy_cd">Récord</string>
+
+    <!-- Profile (full) -->
+    <string name="profile_stats_sessions">ENTRENOS</string>
+    <string name="profile_stats_prs">PRs</string>
+    <string name="profile_stats_routines">RUTINAS</string>
+    <string name="profile_physical_title">DATOS FÍSICOS</string>
+    <string name="profile_weight">Peso</string>
+    <string name="profile_height">Altura</string>
+    <string name="profile_age">Edad</string>
+    <string name="profile_goal">Objetivo</string>
+    <string name="profile_not_set">Sin cargar</string>
+    <string name="profile_height_value">%1$d cm</string>
+    <plurals name="profile_age_value">
+        <item quantity="one">%1$d año</item>
+        <item quantity="other">%1$d años</item>
+    </plurals>
+    <string name="profile_edit_weight_title">Peso corporal (%1$s)</string>
+    <string name="profile_edit_height_title">Altura (cm)</string>
+    <string name="profile_edit_birth_date_title">Fecha de nacimiento</string>
+    <string name="profile_birth_date_placeholder">DD/MM/AAAA</string>
+    <string name="profile_edit_goal_title">Objetivo</string>
+    <string name="profile_goal_gain_muscle">Ganar músculo</string>
+    <string name="profile_goal_lose_weight">Perder peso</string>
+    <string name="profile_goal_maintain">Mantener peso</string>
+    <string name="profile_goal_improve_performance">Mejorar rendimiento</string>
+    <string name="profile_goal_other">Otro</string>
+    <string name="profile_goal_none">Sin especificar</string>
+    <string name="profile_settings_title">CONFIGURACIÓN</string>
+    <string name="profile_weight_unit">Unidad de peso</string>
+    <string name="profile_saved">Datos actualizados</string>
+    <string name="profile_avatar_cd">Foto de perfil</string>
+    <plurals name="profile_sign_out_unsynced_warning">
+        <item quantity="one">Tenés %1$d entrenamiento sin sincronizar; si cerrás sesión se perderá.</item>
+        <item quantity="other">Tenés %1$d entrenamientos sin sincronizar; si cerrás sesión se perderán.</item>
+    </plurals>
+    <string name="profile_sign_out_active_workout_warning">Tenés un entrenamiento en curso; si cerrás sesión se perderá.</string>
+    <string name="profile_sign_out_confirm_anyway">Cerrar sesión igual</string>
 </resources>

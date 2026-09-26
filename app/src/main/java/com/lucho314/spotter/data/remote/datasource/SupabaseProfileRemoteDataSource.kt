@@ -1,5 +1,6 @@
 package com.lucho314.spotter.data.remote.datasource
 
+import com.lucho314.spotter.data.remote.dto.IdDto
 import com.lucho314.spotter.data.remote.dto.ProfileDto
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -17,16 +18,16 @@ class SupabaseProfileRemoteDataSource @Inject constructor(
             filter { eq("id", userId) }
         }.decodeSingleOrNull()
 
-    override suspend fun updatePhysical(userId: String, weightKg: Double?, heightCm: Int?, birthDate: String?, goal: String?) {
+    override suspend fun updatePhysical(userId: String, weightKg: Double?, heightCm: Int?, birthDate: String?, goal: String?): Int =
         postgrest.from("profiles").update({
             set("weight_kg", weightKg)
             set("height_cm", heightCm)
             set("birth_date", birthDate)
             set("fitness_goal", goal)
         }) {
+            select()
             filter { eq("id", userId) }
-        }
-    }
+        }.decodeList<IdDto>().size
 
     override suspend fun countActiveRoutines(userId: String): Int =
         postgrest.from("routines").select(Columns.list("id")) {

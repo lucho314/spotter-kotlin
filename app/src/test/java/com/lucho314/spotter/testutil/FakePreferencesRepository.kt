@@ -11,6 +11,9 @@ class FakePreferencesRepository : PreferencesRepository {
 
     private val onboardingDone = mutableMapOf<String, MutableStateFlow<Boolean>>()
 
+    var clearUserScopedCallCount = 0
+        private set
+
     override suspend fun setWeightUnit(unit: WeightUnit) {
         weightUnitFlow.value = unit
     }
@@ -22,6 +25,7 @@ class FakePreferencesRepository : PreferencesRepository {
     }
 
     override suspend fun clearUserScoped() {
+        clearUserScopedCallCount++
         onboardingDone.clear()
     }
 

@@ -26,3 +26,12 @@ fun AppError.toLoginMessageRes(): Int = when (this) {
     AppError.Unauthorized -> R.string.error_login_failed
     else -> toMessageRes()
 }
+
+/**
+ * Like [toMessageRes], but for a [AppError.Validation] picks the specific
+ * [com.lucho314.spotter.core.common.ValidationReason] message instead of the generic
+ * `error_validation` string - useful for one-shot events (`ActionFailed`) surfacing a validation
+ * failure that isn't already shown as an inline field error.
+ */
+@StringRes
+fun AppError.toUserMessageRes(): Int = if (this is AppError.Validation) reason.toMessageRes() else toMessageRes()

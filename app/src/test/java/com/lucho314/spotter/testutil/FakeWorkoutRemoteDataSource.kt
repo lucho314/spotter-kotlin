@@ -14,6 +14,8 @@ class FakeWorkoutRemoteDataSource : WorkoutRemoteDataSource {
     var lastSessionSets: List<WorkoutSetDto> = emptyList()
     var exerciseSets: List<WorkoutSetDto> = emptyList()
     var deleteSessionRowsAffected: Int = 1
+    var updateSetRowsAffected: Int = 1
+    var deleteSetRowsAffected: Int = 1
     var completedSinceCount: Int = 0
     var lastCompletedAt: String? = null
     var countCompletedResult: Int = 0
@@ -25,16 +27,20 @@ class FakeWorkoutRemoteDataSource : WorkoutRemoteDataSource {
     val uploadedSets = mutableListOf<WorkoutSetInsertDto>()
     /** Records "session" or "sets" in call order, to verify the upload sequencing. */
     val uploadCallOrder = mutableListOf<String>()
+    val getSessionsCalls = mutableListOf<Pair<Long, Long>>()
 
-    override suspend fun getSessions(userId: String, from: Long, to: Long): List<WorkoutSessionDto> = sessions
+    override suspend fun getSessions(userId: String, from: Long, to: Long): List<WorkoutSessionDto> {
+        getSessionsCalls += from to to
+        return sessions
+    }
 
     override suspend fun getSession(sessionId: String): WorkoutSessionDto? = session
 
-    override suspend fun updateSet(setId: String, weightKg: Double, reps: Int) = Unit
+    override suspend fun updateSet(setId: String, weightKg: Double, reps: Int): Int = updateSetRowsAffected
 
     override suspend fun insertSet(dto: WorkoutSetInsertDto) = Unit
 
-    override suspend fun deleteSet(setId: String) = Unit
+    override suspend fun deleteSet(setId: String): Int = deleteSetRowsAffected
 
     override suspend fun deleteSession(sessionId: String): Int = deleteSessionRowsAffected
 

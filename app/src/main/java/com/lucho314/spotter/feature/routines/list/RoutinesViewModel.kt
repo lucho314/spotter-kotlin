@@ -32,10 +32,10 @@ data class RoutinesUiState(
     /** Set only when there is nothing cached to show at all and the initial refresh failed. */
     @StringRes val loadErrorRes: Int? = null,
     /**
-     * Non-null when this user has a workout in progress: shows a "Continuar entrenamiento" banner.
-     * This lives here (not a dashboard banner) because `feature/dashboard/` doesn't exist yet
-     * (migration plan phase 5) - Rutinas is the closest already-shipped top-level screen, and the
-     * one the routine detail screen itself returns to after starting a workout.
+     * Non-null when this user has a workout in progress: shows the shared
+     * [com.lucho314.spotter.feature.common.ActiveWorkoutBanner] ("Continuar entrenamiento"). Lives
+     * in Dashboard and Rutinas: Rutinas is the routine detail screen's own return point after
+     * starting a workout, so it keeps this banner too rather than only living on the dashboard.
      */
     val activeWorkoutRoutineName: String? = null,
 )

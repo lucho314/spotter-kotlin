@@ -32,6 +32,12 @@ class WeightConverterTest {
     }
 
     @Test
+    fun `formatOneDecimal always shows exactly one decimal`() {
+        assertThat(WeightConverter.formatOneDecimal(102.5, WeightUnit.KG)).isEqualTo("102.5")
+        assertThat(WeightConverter.formatOneDecimal(100.0, WeightUnit.KG)).isEqualTo("100.0")
+    }
+
+    @Test
     fun `rounds using the decimal (not the binary) representation of the double`() {
         // 2.675 is stored as 2.67499999999999982236... in binary; BigDecimal(Double) would round
         // this down to 2.67. BigDecimal.valueOf(Double) goes through Double.toString() first and

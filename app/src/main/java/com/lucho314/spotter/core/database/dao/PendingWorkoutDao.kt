@@ -50,4 +50,11 @@ interface PendingWorkoutDao {
 
     @Query("UPDATE pending_workout SET attempts = attempts + 1, last_error = :error WHERE id = :id")
     suspend fun recordAttempt(id: String, error: String)
+
+    /** Sign-out cleanup ([com.lucho314.spotter.domain.repository.LocalDataRepository]): sets before the parent row, explicit rather than relying on the FK cascade pragma. */
+    @Query("DELETE FROM pending_workout_set")
+    suspend fun deleteAllSets()
+
+    @Query("DELETE FROM pending_workout")
+    suspend fun deleteAll()
 }
