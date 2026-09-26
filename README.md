@@ -6,7 +6,7 @@ solo lectura: `E:\Spotter`), manteniendo el mismo backend Supabase sin cambios d
 
 ## Estado
 
-**FASES 1, 2 y 3 de 7 implementadas y aprobadas** (revisión del 2026-09-26). Ver el plan completo
+**FASES 1 a 4 de 7 implementadas y aprobadas** (revisión del 2026-09-26). Ver el plan completo
 en [`docs/MIGRATION_PLAN.md`](docs/MIGRATION_PLAN.md) y el detalle de arquitectura/estructura en
 `docs/`.
 
@@ -19,13 +19,17 @@ Implementado hoy:
 - Gestión de rutinas: lista, archivo, edición (crear/editar), detalle (días, drag & drop, mover de
   día, agregar ejercicio), plantillas (lista, detalle, adopción con compensación transaccional) y
   detalle de ejercicio con video/gif/imagen.
-- Perfil mínimo (identidad + cerrar sesión).
+- Entrenamiento activo: inicio desde una rutina (con selector de día y diálogo si ya hay uno en
+  curso), registro de series con estado persistido en Room (sobrevive a la muerte del proceso),
+  temporizador de descanso con alarma y notificación "Descanso terminado" en segundo plano,
+  finalizar/descartar, y sincronización offline del outbox con WorkManager.
+- Perfil mínimo (identidad + cerrar sesión, que cancela la alarma y la sincronización).
 
-**Pendiente (fases 4 a 7, ver "Planificado" en `docs/*.md`):** entrenamiento activo (temporizador
-de descanso, alarmas), sincronización en segundo plano con WorkManager, historial, progreso,
-dashboard, perfil completo (datos físicos, preferencia kg/lb), compartir/importar rutinas (código e
-IA), exportación de entrenamientos y endurecimiento de release. Las pantallas de Dashboard,
-Historial, Progreso y Entrenamiento activo hoy son placeholders (`ComingSoonScreen`).
+**Pendiente (fases 5 a 7, ver "Planificado" en `docs/*.md`):** historial, progreso, dashboard,
+perfil completo (datos físicos, preferencia kg/lb, `SignOutUseCase` con limpieza de Room),
+compartir/importar rutinas (código e IA), exportación de entrenamientos y endurecimiento de
+release. Las pantallas de Dashboard, Historial y Progreso hoy son placeholders (`ComingSoonScreen`);
+el banner "Entrenamiento en curso" vive por ahora en la pantalla de Rutinas.
 
 No verificado todavía en un dispositivo/emulador real (solo build + tests unitarios).
 
@@ -63,7 +67,7 @@ Desde `E:\Spoter Kotlin\` (con el JDK correcto en el PATH):
 
 ```bash
 ./gradlew assembleDebug            # APK debug
-./gradlew testDebugUnitTest         # tests unitarios (308 @Test en la última corrida en verde)
+./gradlew testDebugUnitTest         # tests unitarios (355 @Test tras FASE 4)
 ./gradlew assembleRelease           # APK release con R8 (falla si faltan las claves de Supabase)
 ./gradlew assembleDebug testDebugUnitTest   # build + tests en un solo paso
 ```

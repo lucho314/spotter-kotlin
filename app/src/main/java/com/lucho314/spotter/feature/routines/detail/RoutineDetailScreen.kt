@@ -85,7 +85,8 @@ fun RoutineDetailScreen(
     onEditClick: (routineId: String) -> Unit,
     onAddExerciseClick: (routineId: String, dayNumber: Int?) -> Unit,
     onExerciseClick: (Int) -> Unit,
-    onStartWorkoutClick: () -> Unit,
+    /** Opens the active workout: after `WorkoutStarted`, or "Continuar" on the already-active dialog. Must not be `dropUnlessResumed`-guarded (see ObserveAsEvents' KDoc). */
+    onOpenWorkout: () -> Unit,
     onArchived: () -> Unit,
     /** Name of the exercise just added from [onAddExerciseClick]'s destination (nav result relayed via `SavedStateHandle`); shows a one-time "X agregado" snackbar. */
     addedExerciseName: String? = null,
@@ -117,7 +118,7 @@ fun RoutineDetailScreen(
 
     // Lifecycle-aware: an event sent while backgrounded (e.g. `Archived`, mid network call) stays
     // buffered in the channel instead of being consumed-then-dropped - see ObserveAsEvents' KDoc.
-    // `onArchived`/`onStartWorkoutClick` themselves are unguarded (no `dropUnlessResumed`): by the
+    // `onArchived`/`onOpenWorkout` themselves are unguarded (no `dropUnlessResumed`): by the
     // time these run, the collection has already resumed to at least STARTED, so they can't fire
     // twice from one event.
     ObserveAsEvents(viewModel.events) { event ->
@@ -126,7 +127,7 @@ fun RoutineDetailScreen(
             is RoutineDetailEvent.ActionFailed -> scope.launch { snackbarHostState.showSnackbar(context.getString(event.messageRes)) }
             RoutineDetailEvent.WorkoutStarted -> {
                 requestNotificationPermissionIfNeeded()
-                onStartWorkoutClick()
+                onOpenWorkout()
             }
 
             is RoutineDetailEvent.WorkoutAlreadyActive -> alreadyActiveWorkout = event.existing
@@ -306,7 +307,7 @@ fun RoutineDetailScreen(
             title = { Text(stringResource(R.string.routine_detail_active_workout_title)) },
             text = { Text(stringResource(R.string.routine_detail_active_workout_message, existingActiveWorkout.routineName)) },
             confirmButton = {
-                TextButton(onClick = { alreadyActiveWorkout = null; requestNotificationPermissionIfNeeded(); onStartWorkoutClick() }) {
+                TextButton(onClick = { alreadyActiveWorkout = null; requestNotificationPermissionIfNeeded(); onOpenWorkout() }) {
                     Text(stringResource(R.string.routine_detail_active_workout_continue))
                 }
             },
