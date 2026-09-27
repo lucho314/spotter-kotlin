@@ -22,6 +22,7 @@ fun ValidationReason.toMessageRes(): Int = when (this) {
     ValidationReason.SHARE_CODE_INVALID -> R.string.validation_share_code_invalid
     ValidationReason.IMAGE_TOO_LARGE -> R.string.validation_image_too_large
     ValidationReason.IMAGE_UNREADABLE -> R.string.validation_image_unreadable
+    ValidationReason.SHARED_ROUTINE_INVALID -> R.string.validation_shared_routine_invalid
     ValidationReason.NO_EXERCISES -> R.string.validation_no_exercises
     ValidationReason.EXERCISE_ALREADY_IN_ROUTINE -> R.string.validation_exercise_already_in_routine
     ValidationReason.DAY_ALREADY_EXISTS -> R.string.validation_day_already_exists

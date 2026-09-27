@@ -20,6 +20,13 @@ private const val FUNCTION_NAME = "parse-routine-image"
  */
 private const val REQUEST_TIMEOUT_MS = 120_000L
 
+// NOTE: `requestTimeoutMillis` alone isn't enough. Ktor 3.5.1's OkHttp engine
+// (`OkHttpEngine.setupTimeoutAttributes`) only overrides `OkHttpClient.Builder.readTimeout` when
+// `socketTimeoutMillis` is set; otherwise it keeps OkHttp's own default of 10s. Since the edge
+// function doesn't write any response bytes until it's done, any analysis longer than 10s used to
+// fail with a `SocketTimeoutException` well before the 120s request timeout ever kicked in
+// (section 2, finding 1).
+
 @Singleton
 class SupabaseAiImportRemoteDataSource @Inject constructor(
     private val functions: Functions,
@@ -32,7 +39,10 @@ class SupabaseAiImportRemoteDataSource @Inject constructor(
         val response = functions.invoke(FUNCTION_NAME) {
             contentType(ContentType.Application.Json)
             setBody(json.encodeToString(ParseRoutineImageRequest.serializer(), request))
-            timeout { requestTimeoutMillis = REQUEST_TIMEOUT_MS }
+            timeout {
+                requestTimeoutMillis = REQUEST_TIMEOUT_MS
+                socketTimeoutMillis = REQUEST_TIMEOUT_MS
+            }
         }
         return json.decodeFromString(ParseRoutineImageResponse.serializer(), response.bodyAsText())
     }

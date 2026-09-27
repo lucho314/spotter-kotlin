@@ -170,6 +170,44 @@ data class SharedRoutineDto(
     @SerialName("routines") val routine: RoutineDetailDto? = null,
 )
 
+/**
+ * Lightweight `getSharedRoutine` select: no ids of the sharer/routine owner, no exercise catalog
+ * join - the previous query (`*, routines(*, routine_days(*), routine_exercises(*, exercises(*,
+ * muscle_groups(*)))))`) pulled all of that for no reason (section 2, finding 4).
+ */
+@Serializable
+data class SharedRoutineImportDto(
+    @SerialName("share_code") val shareCode: String,
+    @SerialName("is_active") val isActive: Boolean,
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("routines") val routine: SharedRoutineBodyDto? = null,
+)
+
+@Serializable
+data class SharedRoutineBodyDto(
+    val name: String,
+    val description: String? = null,
+    @SerialName("days_per_week") val daysPerWeek: Int? = null,
+    @SerialName("routine_days") val routineDays: List<SharedRoutineDayDto> = emptyList(),
+    @SerialName("routine_exercises") val routineExercises: List<SharedRoutineExerciseDto> = emptyList(),
+)
+
+@Serializable
+data class SharedRoutineDayDto(
+    @SerialName("day_number") val dayNumber: Int,
+    val name: String,
+)
+
+@Serializable
+data class SharedRoutineExerciseDto(
+    @SerialName("exercise_id") val exerciseId: Int,
+    @SerialName("day_number") val dayNumber: Int,
+    @SerialName("sort_order") val sortOrder: Int,
+    @SerialName("target_sets") val targetSets: Int,
+    @SerialName("target_reps") val targetReps: Int,
+    @SerialName("rest_seconds") val restSeconds: Int,
+)
+
 @Serializable
 data class RoutineTemplateDto(
     val id: String,

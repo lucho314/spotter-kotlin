@@ -44,3 +44,9 @@ object DeepLinkParser {
         return DeepLink.ImportRoutine(code)
     }
 }
+
+/** Builds the deep links Spotter itself hands out (the inverse of [DeepLinkParser]). */
+object DeepLinks {
+    /** [code] is [ShareCode.value] - callers pass the already-validated code's raw string. */
+    fun importRoutine(code: String): String = "spotter://import/$code"
+}

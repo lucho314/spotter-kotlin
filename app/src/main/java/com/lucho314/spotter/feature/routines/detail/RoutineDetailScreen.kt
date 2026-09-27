@@ -66,6 +66,7 @@ import com.lucho314.spotter.core.designsystem.component.SpotterCard
 import com.lucho314.spotter.core.designsystem.component.SpotterChip
 import com.lucho314.spotter.core.designsystem.theme.Spacing
 import com.lucho314.spotter.core.designsystem.theme.SpotterColors
+import com.lucho314.spotter.core.navigation.DeepLinks
 import com.lucho314.spotter.domain.calc.SpanishWeekdays
 import com.lucho314.spotter.domain.model.ActiveWorkout
 import com.lucho314.spotter.domain.model.RoutineDay
@@ -74,6 +75,8 @@ import com.lucho314.spotter.domain.model.RoutineExercise
 import com.lucho314.spotter.domain.model.UNASSIGNED_DAY_NUMBER
 import com.lucho314.spotter.domain.usecase.DaySelection
 import com.lucho314.spotter.feature.common.ObserveAsEvents
+import com.lucho314.spotter.feature.common.copyPlainTextToClipboard
+import com.lucho314.spotter.feature.common.launchShareText
 import com.lucho314.spotter.feature.common.routineExerciseSummary
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
@@ -91,6 +94,9 @@ fun RoutineDetailScreen(
     /** Name of the exercise just added from [onAddExerciseClick]'s destination (nav result relayed via `SavedStateHandle`); shows a one-time "X agregado" snackbar. */
     addedExerciseName: String? = null,
     onAddedExerciseNameConsumed: () -> Unit = {},
+    /** A message relayed via `SavedStateHandle` from a destination popped back into this one (e.g. "Rutina importada"); shows a one-time snackbar. */
+    relayedMessage: String? = null,
+    onRelayedMessageConsumed: () -> Unit = {},
     viewModel: RoutineDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -131,6 +137,15 @@ fun RoutineDetailScreen(
             }
 
             is RoutineDetailEvent.WorkoutAlreadyActive -> alreadyActiveWorkout = event.existing
+            is RoutineDetailEvent.ShareCodeReady -> {
+                context.copyPlainTextToClipboard(context.getString(R.string.routine_share_clip_label), event.code)
+                val message = context.getString(R.string.routine_share_message, event.routineName, event.code, DeepLinks.importRoutine(event.code))
+                val shared = context.launchShareText(message, context.getString(R.string.routine_share_chooser_title))
+                scope.launch {
+                    val copiedMessage = context.getString(R.string.routine_share_code_copied, event.code)
+                    snackbarHostState.showSnackbar(if (shared) copiedMessage else context.getString(R.string.share_no_app))
+                }
+            }
         }
     }
 
@@ -144,7 +159,13 @@ fun RoutineDetailScreen(
         }
     }
 
-    val shareComingSoon = stringResource(R.string.placeholder_coming_soon)
+    LaunchedEffect(relayedMessage) {
+        if (relayedMessage != null) {
+            onRelayedMessageConsumed()
+            snackbarHostState.showSnackbar(relayedMessage)
+        }
+    }
+
     val noExercisesMessage = stringResource(R.string.routine_detail_start_needs_exercises)
 
     Scaffold(
@@ -158,7 +179,10 @@ fun RoutineDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { scope.launch { snackbarHostState.showSnackbar(shareComingSoon) } }) {
+                    IconButton(
+                        onClick = viewModel::onShareClick,
+                        enabled = uiState.routine != null && !uiState.sharing,
+                    ) {
                         Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.routine_detail_share))
                     }
                     IconButton(onClick = { onAddExerciseClick(viewModel.routineId, null) }) {

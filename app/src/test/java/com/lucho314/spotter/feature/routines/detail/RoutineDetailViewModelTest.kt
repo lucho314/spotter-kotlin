@@ -59,10 +59,12 @@ class RoutineDetailViewModelTest {
         routineRepository: com.lucho314.spotter.domain.repository.RoutineRepository,
         activeWorkoutRepository: FakeActiveWorkoutRepository = FakeActiveWorkoutRepository(),
         timeProvider: FakeTimeProvider = FakeTimeProvider(),
+        sharingRepository: com.lucho314.spotter.testutil.FakeSharingRepository = com.lucho314.spotter.testutil.FakeSharingRepository(),
     ) = RoutineDetailViewModel(
         SavedStateHandle(mapOf("routineId" to "r1")),
         routineRepository,
         StartWorkoutUseCase(routineRepository, activeWorkoutRepository, FakePreferencesRepository(), FakeIdGenerator(), timeProvider),
+        com.lucho314.spotter.domain.usecase.ShareRoutineUseCase(sharingRepository, java.security.SecureRandom()),
         timeProvider,
         FakeAuthRepository(AuthState.SignedIn(user)),
     )
@@ -359,5 +361,69 @@ class RoutineDetailViewModelTest {
         val vm = viewModel(FakeRoutineRepository(), timeProvider = timeProvider)
 
         assertThat(vm.todayWeekdayName()).isEqualTo("Lunes")
+    }
+
+    @Test
+    fun `onShareClick sends ShareCodeReady with the routine name and code on success`() = runTest {
+        val routineRepository = FakeRoutineRepository().apply { setRoutineDetail("r1", routineWithOneExercise()) }
+        val sharingRepository = com.lucho314.spotter.testutil.FakeSharingRepository().apply {
+            findActiveShareResult = AppResult.Success(requireNotNull(com.lucho314.spotter.domain.model.ShareCode.parse("K7MN3QXP")))
+        }
+        val vm = viewModel(routineRepository, sharingRepository = sharingRepository)
+        collectUiState(vm)
+
+        vm.events.test {
+            vm.onShareClick()
+            val event = awaitItem() as RoutineDetailEvent.ShareCodeReady
+            assertThat(event.code).isEqualTo("K7MN3QXP")
+        }
+    }
+
+    @Test
+    fun `onShareClick failure reports the mapped error`() = runTest {
+        val routineRepository = FakeRoutineRepository().apply { setRoutineDetail("r1", routineWithOneExercise()) }
+        val sharingRepository = com.lucho314.spotter.testutil.FakeSharingRepository().apply {
+            findActiveShareResult = AppResult.Failure(AppError.Network)
+        }
+        val vm = viewModel(routineRepository, sharingRepository = sharingRepository)
+        collectUiState(vm)
+
+        vm.events.test {
+            vm.onShareClick()
+            assertThat(awaitItem()).isEqualTo(RoutineDetailEvent.ActionFailed(R.string.error_network))
+        }
+    }
+
+    @Test
+    fun `onShareClick ignores a second call while the first is still in flight`() = runTest {
+        val routineRepository = FakeRoutineRepository().apply { setRoutineDetail("r1", routineWithOneExercise()) }
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val sharingRepository = com.lucho314.spotter.testutil.FakeSharingRepository().apply { createShareGate = gate }
+        val vm = viewModel(routineRepository, sharingRepository = sharingRepository)
+        collectUiState(vm)
+
+        vm.onShareClick()
+        runCurrent()
+        assertThat(vm.uiState.value.sharing).isTrue()
+        vm.onShareClick()
+        runCurrent()
+        gate.complete(Unit)
+        runCurrent()
+
+        assertThat(sharingRepository.createShareCodes).hasSize(1)
+        assertThat(vm.uiState.value.sharing).isFalse()
+    }
+
+    @Test
+    fun `onShareClick does nothing without a loaded routine`() = runTest {
+        val routineRepository = FakeRoutineRepository()
+        val sharingRepository = com.lucho314.spotter.testutil.FakeSharingRepository()
+        val vm = viewModel(routineRepository, sharingRepository = sharingRepository)
+        collectUiState(vm)
+
+        vm.onShareClick()
+        runCurrent()
+
+        assertThat(sharingRepository.findActiveShareCallCount).isEqualTo(0)
     }
 }

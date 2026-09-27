@@ -4,18 +4,23 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lucho314.spotter.R
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.common.TimeProvider
 import com.lucho314.spotter.core.navigation.RouteArgs
+import com.lucho314.spotter.domain.calc.ExerciseSetGrouping
 import com.lucho314.spotter.domain.calc.SetInputValidation
 import com.lucho314.spotter.domain.calc.SetInputValidator
 import com.lucho314.spotter.domain.calc.WeightConverter
 import com.lucho314.spotter.domain.calc.WorkoutMath
+import com.lucho314.spotter.domain.model.ExportFormat
 import com.lucho314.spotter.domain.model.WeightUnit
 import com.lucho314.spotter.domain.model.WorkoutSessionDetail
 import com.lucho314.spotter.domain.model.WorkoutSet
 import com.lucho314.spotter.domain.repository.PreferencesRepository
+import com.lucho314.spotter.domain.repository.WorkoutExportRepository
 import com.lucho314.spotter.domain.repository.WorkoutHistoryRepository
+import com.lucho314.spotter.domain.usecase.BuildWorkoutExportUseCase
 import com.lucho314.spotter.feature.common.SpotterDateFormats
 import com.lucho314.spotter.feature.common.toMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,10 +53,15 @@ data class SessionDetailUiState(
     val addingExerciseIds: Set<Int> = emptySet(),
     val editing: EditingSet? = null,
     @StringRes val editErrorRes: Int? = null,
-)
+    /** Non-null while [SessionDetailViewModel.onExport] is rendering that format. */
+    val exporting: ExportFormat? = null,
+) {
+    val canShare: Boolean get() = blocks.isNotEmpty()
+}
 
 sealed interface SessionDetailEvent {
     data class ActionFailed(@StringRes val messageRes: Int) : SessionDetailEvent
+    data class ShareFile(val uri: String, val mimeType: String) : SessionDetailEvent
 }
 
 /**
@@ -65,6 +75,8 @@ class SessionDetailViewModel @Inject constructor(
     private val workoutHistoryRepository: WorkoutHistoryRepository,
     private val preferencesRepository: PreferencesRepository,
     private val timeProvider: TimeProvider,
+    private val buildWorkoutExport: BuildWorkoutExportUseCase,
+    private val workoutExportRepository: WorkoutExportRepository,
 ) : ViewModel() {
 
     private val sessionId: String = checkNotNull(savedStateHandle[RouteArgs.SESSION_ID])
@@ -76,6 +88,7 @@ class SessionDetailViewModel @Inject constructor(
     private val addingExerciseIds = MutableStateFlow<Set<Int>>(emptySet())
     private val editing = MutableStateFlow<EditingSet?>(null)
     private val editErrorRes = MutableStateFlow<Int?>(null)
+    private val exporting = MutableStateFlow<ExportFormat?>(null)
 
     private val eventChannel = Channel<SessionDetailEvent>(Channel.BUFFERED)
     val events: Flow<SessionDetailEvent> = eventChannel.receiveAsFlow()
@@ -89,10 +102,10 @@ class SessionDetailViewModel @Inject constructor(
         val addingExerciseIds: Set<Int>,
     )
 
-    private data class EditState(val editing: EditingSet?, val editErrorRes: Int?)
+    private data class EditState(val editing: EditingSet?, val editErrorRes: Int?, val exporting: ExportFormat?)
 
     private val core = combine(detail, loading, loadErrorRes, savingSetIds, addingExerciseIds, ::Core)
-    private val editState = combine(editing, editErrorRes, ::EditState)
+    private val editState = combine(editing, editErrorRes, exporting, ::EditState)
 
     val uiState: StateFlow<SessionDetailUiState> = combine(core, editState, preferencesRepository.weightUnit) { c, e, unit ->
         val d = c.detail
@@ -110,6 +123,7 @@ class SessionDetailViewModel @Inject constructor(
             addingExerciseIds = c.addingExerciseIds,
             editing = e.editing,
             editErrorRes = e.editErrorRes,
+            exporting = e.exporting,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SessionDetailUiState())
 
@@ -147,9 +161,24 @@ class SessionDetailViewModel @Inject constructor(
     }
 
     private fun buildBlocks(sets: List<WorkoutSet>): List<ExerciseBlock> =
-        sets.groupBy { it.exerciseId }
-            .map { (exerciseId, exerciseSets) -> ExerciseBlock(exerciseId, exerciseSets.first().exerciseName, exerciseSets.sortedBy { it.setNumber }) }
-            .sortedWith(compareBy({ block -> block.sets.minOf { it.completedAt } }, { it.exerciseId }))
+        ExerciseSetGrouping.group(sets).map { ExerciseBlock(it.exerciseId, it.exerciseName, it.sets) }
+
+    fun onExport(format: ExportFormat) {
+        val currentDetail = detail.value ?: return
+        if (exporting.value != null) return
+        exporting.value = format
+        viewModelScope.launch {
+            try {
+                val data = buildWorkoutExport(currentDetail, uiState.value.weightUnit)
+                when (val result = workoutExportRepository.export(data, format)) {
+                    is AppResult.Success -> eventChannel.send(SessionDetailEvent.ShareFile(result.value.uri, result.value.mimeType))
+                    is AppResult.Failure -> eventChannel.send(SessionDetailEvent.ActionFailed(R.string.share_workout_error))
+                }
+            } finally {
+                exporting.value = null
+            }
+        }
+    }
 
     fun onEditSet(setId: String) {
         val set = detail.value?.sets?.firstOrNull { it.id == setId } ?: return

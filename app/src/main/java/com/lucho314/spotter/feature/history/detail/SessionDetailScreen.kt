@@ -2,6 +2,7 @@
 
 package com.lucho314.spotter.feature.history.detail
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -58,6 +60,8 @@ import com.lucho314.spotter.domain.calc.WorkoutMath
 import com.lucho314.spotter.domain.model.WeightUnit
 import com.lucho314.spotter.domain.model.WorkoutSet
 import com.lucho314.spotter.feature.common.ObserveAsEvents
+import com.lucho314.spotter.feature.common.launchShareFile
+import com.lucho314.spotter.feature.history.share.ShareWorkoutSheet
 import kotlinx.coroutines.launch
 
 @Composable
@@ -67,10 +71,16 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var setToDelete by remember { mutableStateOf<WorkoutSet?>(null) }
+    var showShareSheet by remember { mutableStateOf(false) }
 
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
             is SessionDetailEvent.ActionFailed -> scope.launch { snackbarHostState.showSnackbar(context.getString(event.messageRes)) }
+            is SessionDetailEvent.ShareFile -> {
+                showShareSheet = false
+                val shared = context.launchShareFile(Uri.parse(event.uri), event.mimeType, context.getString(R.string.share_workout_chooser_title))
+                if (!shared) scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.share_no_app)) }
+            }
         }
     }
 
@@ -82,6 +92,14 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.generic_back))
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { showShareSheet = true },
+                        enabled = uiState.canShare && uiState.exporting == null,
+                    ) {
+                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.session_detail_share_cd))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -111,6 +129,10 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
             onDismiss = viewModel::onEditDismiss,
             onConfirm = viewModel::onEditConfirm,
         )
+    }
+
+    if (showShareSheet) {
+        ShareWorkoutSheet(exporting = uiState.exporting, onSelect = viewModel::onExport, onDismiss = { showShareSheet = false })
     }
 
     val pendingDelete = setToDelete

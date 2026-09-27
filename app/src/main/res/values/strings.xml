@@ -23,8 +23,6 @@
     <string name="nav_progress">Progreso</string>
     <string name="nav_profile">Perfil</string>
 
-    <string name="placeholder_coming_soon">Próximamente</string>
-
     <!-- Profile (minimal skeleton) -->
     <string name="profile_sign_out">Cerrar sesión</string>
     <string name="profile_sign_out_confirm_title">¿Cerrar sesión?</string>
@@ -379,4 +377,72 @@
     </plurals>
     <string name="profile_sign_out_active_workout_warning">Tenés un entrenamiento en curso; si cerrás sesión se perderá.</string>
     <string name="profile_sign_out_confirm_anyway">Cerrar sesión igual</string>
+
+    <!-- Routine share -->
+    <string name="routine_share_message">Te comparto mi rutina \"%1$s\" en Spotter\nCódigo: %2$s\n%3$s</string>
+    <string name="routine_share_chooser_title">Compartir rutina</string>
+    <string name="routine_share_clip_label">Código de rutina Spotter</string>
+    <string name="routine_share_code_copied">Código copiado: %1$s</string>
+    <string name="share_no_app">No encontramos una app para compartir.</string>
+
+    <!-- Import by code -->
+    <string name="import_code_title">Importar rutina</string>
+    <string name="import_code_label">RUTINA COMPARTIDA</string>
+    <string name="import_code_invalid_title">Código inválido o expirado</string>
+    <string name="import_code_invalid_description">Pedile a quien te la compartió un código nuevo.</string>
+    <string name="import_code_action">Importar rutina</string>
+    <string name="import_code_imported">Rutina importada</string>
+    <plurals name="import_code_day_count">
+        <item quantity="one">%1$d día</item>
+        <item quantity="other">%1$d días</item>
+    </plurals>
+    <string name="validation_shared_routine_invalid">Esa rutina compartida no se puede importar.</string>
+
+    <!-- Import with AI -->
+    <string name="import_image_title">Importar con IA</string>
+    <string name="import_image_description">Sacale una foto a tu rutina escrita o elegí una captura. La IA la convierte en una rutina de Spotter.</string>
+    <string name="import_image_camera">Cámara</string>
+    <string name="import_image_gallery">Galería</string>
+    <string name="import_image_change">Cambiar imagen</string>
+    <string name="import_image_preview_cd">Imagen seleccionada</string>
+    <string name="import_image_action">Importar rutina</string>
+    <string name="import_image_loading">Analizando rutina con IA... Puede tardar unos segundos</string>
+    <string name="import_image_created">\"%1$s\" creada</string>
+    <string name="import_image_created_generic">Rutina creada</string>
+    <string name="import_image_no_camera_app">No encontramos una app de cámara.</string>
+    <string name="import_image_see_routines">Ver rutinas</string>
+    <string name="import_image_error_offline">Sin conexión. Conectate a internet para importar con IA.</string>
+    <string name="import_image_error_timeout">La IA tardó demasiado. Puede que la rutina se haya creado igual: revisá tu lista antes de intentar de nuevo.</string>
+    <string name="import_image_error_connection_lost">Se cortó la conexión. Puede que la rutina se haya creado igual: revisá tu lista antes de intentar de nuevo.</string>
+    <string name="import_image_error_not_recognized">No pudimos reconocer una rutina en la imagen. Probá con una foto más clara.</string>
+    <string name="import_image_error_generic">No pudimos importar la rutina. Intentá de nuevo.</string>
+
+    <!-- Share workout -->
+    <string name="session_detail_share_cd">Compartir entrenamiento</string>
+    <string name="share_workout_title">Compartir entrenamiento</string>
+    <string name="share_workout_pdf">PDF Detallado</string>
+    <string name="share_workout_pdf_description">Todas las series, listo para guardar o imprimir</string>
+    <string name="share_workout_story">Historia</string>
+    <string name="share_workout_story_description">Imagen vertical para redes (1080×1920)</string>
+    <string name="share_workout_chooser_title">Compartir entrenamiento</string>
+    <string name="share_workout_error">No se pudo generar el archivo. Intentá de nuevo.</string>
+
+    <!-- Export content (PDF / story) -->
+    <string name="export_brand" translatable="false">SPOTTER</string>
+    <string name="export_exercises_label">EJERCICIOS</string>
+    <string name="export_table_weight">Peso (%1$s)</string>
+    <string name="export_table_reps">Reps</string>
+    <string name="export_table_rpe">RPE</string>
+    <string name="export_warmup_short">C</string>
+    <string name="export_continued">%1$s (cont.)</string>
+    <string name="export_footer">Generado con Spotter</string>
+    <string name="export_page_number">Página %1$d</string>
+    <plurals name="export_exercise_summary">
+        <item quantity="one">%1$d × %2$d rep — %3$s %4$s</item>
+        <item quantity="other">%1$d × %2$d reps — %3$s %4$s</item>
+    </plurals>
+    <plurals name="export_more_exercises">
+        <item quantity="one">+%1$d ejercicio más</item>
+        <item quantity="other">+%1$d ejercicios más</item>
+    </plurals>
 </resources>

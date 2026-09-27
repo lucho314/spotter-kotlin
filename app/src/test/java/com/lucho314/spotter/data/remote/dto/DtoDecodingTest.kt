@@ -138,4 +138,27 @@ class DtoDecodingTest {
         assertThat(dto.routineExercises).hasSize(2)
         assertThat(dto.routineDays.single().name).isEqualTo("Lunes")
     }
+
+    @Test
+    fun `decodes the lightweight shared-routine-import select`() {
+        val raw = """
+            {
+              "share_code": "K7MN3QXP", "is_active": true, "expires_at": null,
+              "routines": {
+                "name": "Push", "description": "Programa de fuerza", "days_per_week": 3,
+                "routine_days": [{ "day_number": 1, "name": "Lunes" }],
+                "routine_exercises": [
+                  { "exercise_id": 1, "day_number": 1, "sort_order": 0, "target_sets": 3, "target_reps": 10, "rest_seconds": 90 }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val dto = json.decodeFromString<SharedRoutineImportDto>(raw)
+
+        assertThat(dto.isActive).isTrue()
+        assertThat(dto.routine?.name).isEqualTo("Push")
+        assertThat(dto.routine?.routineDays?.single()?.name).isEqualTo("Lunes")
+        assertThat(dto.routine?.routineExercises?.single()?.exerciseId).isEqualTo(1)
+    }
 }

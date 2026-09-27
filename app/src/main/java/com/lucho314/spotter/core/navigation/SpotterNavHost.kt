@@ -5,6 +5,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -13,12 +14,14 @@ import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.lucho314.spotter.R
 import com.lucho314.spotter.feature.auth.OnboardingScreen
-import com.lucho314.spotter.feature.common.ComingSoonScreen
 import com.lucho314.spotter.feature.dashboard.DashboardScreen
 import com.lucho314.spotter.feature.exercise.ExerciseDetailScreen
 import com.lucho314.spotter.feature.history.detail.SessionDetailScreen
 import com.lucho314.spotter.feature.history.list.HistoryScreen
+import com.lucho314.spotter.feature.importroutine.code.ImportCodeScreen
+import com.lucho314.spotter.feature.importroutine.image.ImportImageScreen
 import com.lucho314.spotter.feature.profile.ProfileScreen
 import com.lucho314.spotter.feature.progress.ProgressScreen
 import com.lucho314.spotter.feature.routines.addexercise.AddExerciseScreen
@@ -33,6 +36,9 @@ import com.lucho314.spotter.feature.workout.WorkoutScreen
 /** Nav-result relay keys (see the "returning a result" pattern in [SpotterNavHost]'s `getBackStackEntry`/`previousBackStackEntry` usages below). */
 private const val KEY_ROUTINES_CREATED_FROM_TEMPLATE = "routines_created_from_template"
 private const val KEY_ADDED_EXERCISE_NAME = "added_exercise_name"
+
+/** A one-time message relayed to `RoutineDetailRoute` from a destination popped back into it (e.g. "Rutina importada", `"X" creada`). */
+private const val KEY_ROUTINE_DETAIL_MESSAGE = "routine_detail_message"
 
 /** `true`/`false` (online/offline) right after finishing a workout, relayed to `DashboardRoute`'s own `SavedStateHandle` (carry-over 3). */
 private const val KEY_WORKOUT_FINISHED_ONLINE = "workout_finished_online"
@@ -68,16 +74,16 @@ fun NavController.navigateToWorkout() {
 
 /**
  * Single `NavHost` for the authenticated app. Top-level destinations, routines/templates/exercise
- * detail (phase 3), the active workout (phase 4) and dashboard/history/progress (phase 5) are wired
- * up; import and the AI import flow are still placeholders until phase 6 (see
- * MIGRATION_PLAN.md section 10).
+ * detail (phase 3), the active workout (phase 4), dashboard/history/progress (phase 5) and
+ * sharing/importing routines plus the AI import flow (phase 6) are all wired up here.
  *
  * Two different kinds of callback are wired up here, deliberately guarded differently:
  * - **User clicks** (`onBack`, `onRoutineClick`, etc.): guarded with [dropUnlessResumed] (no-arg)
  *   or [dropUnlessResumed1]/[dropUnlessResumed2] (parameterized), so a double-tap or a tap racing
  *   a back gesture can't fire `navigate()` twice.
  * - **Async-operation results** (`onSaved`, `onArchived`, `onExerciseAdded`, `onRoutinesCreated`,
- *   `RoutineDetailScreen`'s `onOpenWorkout`, Onboarding's `onDone`, `WorkoutScreen`'s `onFinished`):
+ *   `RoutineDetailScreen`'s `onOpenWorkout`, `ImportCodeScreen`'s `onImported`,
+ *   `ImportImageScreen`'s `onRoutineCreated`, Onboarding's `onDone`, `WorkoutScreen`'s `onFinished`):
  *   driven by a ViewModel event that can legitimately arrive while this screen is backgrounded (mid
  *   network call). These are **not** guarded here - see
  *   `com.lucho314.spotter.feature.common.ObserveAsEvents`'s KDoc: guarding the callback instead of
@@ -165,6 +171,10 @@ fun SpotterNavHost(
                 entry.savedStateHandle.getStateFlow<String?>(KEY_ADDED_EXERCISE_NAME, null)
             }
             val addedExerciseName by addedExerciseNameFlow.collectAsState()
+            val relayedMessageFlow = remember(entry) {
+                entry.savedStateHandle.getStateFlow<String?>(KEY_ROUTINE_DETAIL_MESSAGE, null)
+            }
+            val relayedMessage by relayedMessageFlow.collectAsState()
             RoutineDetailScreen(
                 onBack = dropUnlessResumed { navController.popBackStack() },
                 onEditClick = lifecycleOwner.dropUnlessResumed1 { routineId -> navController.navigate(RoutineEditRoute(routineId)) },
@@ -180,6 +190,8 @@ fun SpotterNavHost(
                 onArchived = { navController.popBackStack() },
                 addedExerciseName = addedExerciseName,
                 onAddedExerciseNameConsumed = { entry.savedStateHandle.remove<String>(KEY_ADDED_EXERCISE_NAME) },
+                relayedMessage = relayedMessage,
+                onRelayedMessageConsumed = { entry.savedStateHandle.remove<String>(KEY_ROUTINE_DETAIL_MESSAGE) },
             )
         }
         composable<AddExerciseRoute> {
@@ -246,10 +258,35 @@ fun SpotterNavHost(
                 onDiscarded = { navController.popBackStack() },
             )
         }
-        // The real import-by-code and AI-import screens ship in a later phase; these placeholders
-        // just give a destination to land on (the pending deep link, and the routines list's
-        // shortcuts).
-        composable<ImportCodeRoute> { ComingSoonScreen() }
-        composable<ImportImageRoute> { ComingSoonScreen() }
+        composable<ImportCodeRoute> {
+            val context = LocalContext.current
+            ImportCodeScreen(
+                onBack = dropUnlessResumed { navController.popBackStack() },
+                // Unguarded: driven by `ImportCodeEvent.Imported`, not a user click - see this
+                // file's KDoc on async-operation results.
+                onImported = { routineId ->
+                    navController.navigate(RoutineDetailRoute(routineId)) { popUpTo<ImportCodeRoute> { inclusive = true } }
+                    navController.currentBackStackEntry?.savedStateHandle?.set(KEY_ROUTINE_DETAIL_MESSAGE, context.getString(R.string.import_code_imported))
+                },
+            )
+        }
+        composable<ImportImageRoute> {
+            val context = LocalContext.current
+            ImportImageScreen(
+                onBack = dropUnlessResumed { navController.popBackStack() },
+                // Unguarded: driven by `ImportImageEvent.Imported`, not a user click - see this
+                // file's KDoc on async-operation results.
+                onRoutineCreated = { routineId, name ->
+                    navController.navigate(RoutineDetailRoute(routineId)) { popUpTo<ImportImageRoute> { inclusive = true } }
+                    val message = name?.let { context.getString(R.string.import_image_created, it) } ?: context.getString(R.string.import_image_created_generic)
+                    navController.currentBackStackEntry?.savedStateHandle?.set(KEY_ROUTINE_DETAIL_MESSAGE, message)
+                },
+                onSeeRoutines = dropUnlessResumed {
+                    if (!navController.popBackStack(RoutinesRoute, inclusive = false)) {
+                        navController.navigateToTopLevel(TopLevelDestination.ROUTINES)
+                    }
+                },
+            )
+        }
     }
 }

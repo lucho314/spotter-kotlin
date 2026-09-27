@@ -28,6 +28,12 @@ import kotlinx.coroutines.withContext
  * [CancellationException] is rethrown afterwards so coroutine cancellation still propagates
  * normally (review carry-over: without this, navigating back while adopting left half-created
  * routines behind, same as RN bug 22).
+ *
+ * **[RESUELTO en FASE 6] Residual risk, shared with [com.lucho314.spotter.domain.usecase.ImportSharedRoutineUseCase]:**
+ * if the cancellation lands while `createRoutine` itself is in flight (not yet returned), the
+ * routine can end up created server-side with no id known here to compensate with. This is
+ * mitigated by `BackHandler` in the screens driving both use cases, which disables navigating away
+ * while the operation is running.
  */
 class AdoptTemplateUseCase @Inject constructor(
     private val routineRepository: RoutineRepository,

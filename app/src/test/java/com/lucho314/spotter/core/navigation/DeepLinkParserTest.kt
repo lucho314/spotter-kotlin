@@ -62,4 +62,22 @@ class DeepLinkParserTest {
     fun `malformed uri is ignored`() {
         assertThat(DeepLinkParser.parse("not a uri at all ://")).isNull()
     }
+
+    @Test
+    fun `DeepLinks importRoutine round-trips through DeepLinkParser for a client-format code`() {
+        val code = requireNotNull(com.lucho314.spotter.domain.model.ShareCode.parse("K7MN3QXP"))
+
+        val link = DeepLinkParser.parse(DeepLinks.importRoutine(code.value))
+
+        assertThat(link).isEqualTo(DeepLink.ImportRoutine(code))
+    }
+
+    @Test
+    fun `DeepLinks importRoutine round-trips for a legacy lowercase hex code`() {
+        val code = requireNotNull(com.lucho314.spotter.domain.model.ShareCode.parse("a1b2c3d4e5f6"))
+
+        val link = DeepLinkParser.parse(DeepLinks.importRoutine(code.value))
+
+        assertThat(link).isEqualTo(DeepLink.ImportRoutine(code))
+    }
 }

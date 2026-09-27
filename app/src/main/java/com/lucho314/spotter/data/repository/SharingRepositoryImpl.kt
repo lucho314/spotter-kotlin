@@ -44,6 +44,10 @@ class SharingRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getSharedRoutine(code: ShareCode): AppResult<SharedRoutineContent?> = safeCall {
-        remote.getSharedRoutine(code.value)?.toDomain()
+        // Belt and suspenders: never trust the response to actually match what was asked for or to
+        // still be active, even though the query already filters on both (section 3.3).
+        remote.getSharedRoutine(code.value)
+            ?.takeIf { it.isActive && it.shareCode == code.value }
+            ?.toDomain()
     }
 }

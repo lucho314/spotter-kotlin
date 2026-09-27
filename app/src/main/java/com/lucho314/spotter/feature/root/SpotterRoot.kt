@@ -110,7 +110,9 @@ private fun AuthenticatedApp(
         LaunchedEffect(pendingImportCode) {
             val code = pendingImportCode ?: return@LaunchedEffect
             navController.currentBackStackEntryFlow.first()
-            navController.navigate(ImportCodeRoute(code.value))
+            // popUpTo<ImportCodeRoute>: a second deep link replaces an already-open preview instead
+            // of stacking on top of it. A no-op if there's no ImportCodeRoute in the back stack yet.
+            navController.navigate(ImportCodeRoute(code.value)) { popUpTo<ImportCodeRoute> { inclusive = true } }
             onDeepLinkConsumed()
         }
 

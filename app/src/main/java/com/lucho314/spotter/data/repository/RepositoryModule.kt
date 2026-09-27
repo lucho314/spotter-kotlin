@@ -1,9 +1,12 @@
 package com.lucho314.spotter.data.repository
 
+import com.lucho314.spotter.data.export.WorkoutExportRepositoryImpl
+import com.lucho314.spotter.data.image.ImageRepositoryImpl
 import com.lucho314.spotter.domain.repository.ActiveWorkoutRepository
 import com.lucho314.spotter.domain.repository.AiImportRepository
 import com.lucho314.spotter.domain.repository.AuthRepository
 import com.lucho314.spotter.domain.repository.ExerciseRepository
+import com.lucho314.spotter.domain.repository.ImageRepository
 import com.lucho314.spotter.domain.repository.LocalDataRepository
 import com.lucho314.spotter.domain.repository.PendingWorkoutRepository
 import com.lucho314.spotter.domain.repository.PreferencesRepository
@@ -12,6 +15,7 @@ import com.lucho314.spotter.domain.repository.ProgressRepository
 import com.lucho314.spotter.domain.repository.RoutineRepository
 import com.lucho314.spotter.domain.repository.SharingRepository
 import com.lucho314.spotter.domain.repository.TemplateRepository
+import com.lucho314.spotter.domain.repository.WorkoutExportRepository
 import com.lucho314.spotter.domain.repository.WorkoutHistoryRepository
 import dagger.Binds
 import dagger.Module
@@ -74,4 +78,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindLocalDataRepository(impl: LocalDataRepositoryImpl): LocalDataRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindImageRepository(impl: ImageRepositoryImpl): ImageRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutExportRepository(impl: WorkoutExportRepositoryImpl): WorkoutExportRepository
 }
