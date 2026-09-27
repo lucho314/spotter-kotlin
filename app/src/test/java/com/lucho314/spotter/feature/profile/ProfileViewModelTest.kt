@@ -32,6 +32,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -74,6 +75,7 @@ class ProfileViewModelTest {
 
     private fun TestScope.collectUiState(vm: ProfileViewModel) {
         backgroundScope.launch { vm.uiState.collect {} }
+        runCurrent()
     }
 
     @Test

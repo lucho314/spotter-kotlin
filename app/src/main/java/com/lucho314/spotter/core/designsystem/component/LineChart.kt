@@ -72,7 +72,7 @@ fun LineChart(
         val labelIndices = LineChartGeometry.labelIndices(points.size, maxLabels)
         labelIndices.forEach { index ->
             val layout = textMeasurer.measure(points[index].label, labelStyle)
-            val x = (xs[index] - layout.size.width / 2f).coerceIn(0f, size.width - layout.size.width)
+            val x = (xs[index] - layout.size.width / 2f).coerceIn(0f, (size.width - layout.size.width).coerceAtLeast(0f))
             drawText(layout, topLeft = Offset(x, bottom + labelPaddingPx))
         }
     }

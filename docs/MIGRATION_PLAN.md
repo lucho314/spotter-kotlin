@@ -1267,6 +1267,21 @@ El botón primario usa un gradiente horizontal `#F4FFC6 → #C7EF00` con texto `
 
 **Aceptación de la fase 6:** tests verdes; el deep link `adb shell am start -a android.intent.action.VIEW -d "spotter://import/ABCDEFGH" com.lucho314.spotter.debug` abre la vista previa (o el error) solo después del login.
 
+**Desviaciones registradas durante la implementación:**
+
+1. **Ubicación de `WorkoutExportDataBuilder`:** va en `domain/calc/`, no en `data/export/`, porque `BuildWorkoutExportUseCase` lo delega y la feature necesita acceso a través del use case. Así queda testeable en el arnés JVM (que incluye `domain/` completo).
+2. **Forma estructurada de `WorkoutExportData`:** en vez de un objeto plano con textos de UI, lleva números (peso en kg, volumen, duración en minutos, sets totales) y textos numéricos ya formateados (ej. "45 min", "12.345 kg", "8" para RPE). Los plurales ("3 reps", "+2 ejercicios más", "1RM est.") y las etiquetas de encabezado se arman en los renderers con `getQuantityString(context.resources, @plurals)`, así no hay HTML/template en el dominio.
+3. **Orden de ejercicios en la exportación:** es `completedAt` mínimo por ejercicio y luego `exerciseId`, idéntico a `SessionDetailViewModel.buildBlocks` que ahora delega en `ExerciseSetGrouping`. Es el "orden de aparición" de una unificación de sets por ejercicio, no el de Postgrest que no está garantizado.
+4. **`AiImportRepository.importFromImage` devuelve `AiImportedRoutine`:** el texto de error de la función nunca se propaga a la UI ni a un `AppError.Server(message)`. Solo el código de error (`TIMEOUT`, `REJECTED`, etc., del nuevo enum `AiImportErrorCodes`) se pone en `AppError.Server(code)`. El mapeo de excepciones es propio en `AiImportErrorMapper`: `HttpRequestTimeoutException` → `TIMEOUT`, `413 RestException` → `Validation(IMAGE_TOO_LARGE)`, JSON inválido → `INVALID_RESPONSE`, etc.
+5. **`ImportRoutineFromImageUseCase` recibe `userId` y `routineRepository`:** valida que el UUID devuelto por la función sea formato UUID válido, y que la rutina tras un re-fetch con el filtro `user_id` exista de verdad (frente a B2: imposibilidad de que el servidor devuelva una rutina de otro usuario). El nombre mostrado sale de la base (re-fetch), no de la respuesta. En fallos ambiguos (timeout, red), refresca la lista completa de rutinas para que una creada igual aparezca.
+6. **Socket timeout:** `SupabaseAiImportRemoteDataSource.timeout { socketTimeoutMillis = 120_000; requestTimeoutMillis = 120_000 }`. Contexto: Ktor 3.5.1 con OkHttp solo configura `readTimeout` si `socketTimeoutMillis` es explícitamente ≠ null; de lo contrario, queda el default de OkHttp de 10 segundos. La función puede tardar más de 10s procesando la imagen. Corrigiendo ambos junto mantiene ambos timeouts sincronizados.
+7. **Lectura del share con DTO liviano:** nueva consulta `SharedRoutineImportDto` (sin `id` del usuario que creó, sin catálogo de ejercicios - solo la estructura mínima). Validación en cliente: el `share_code` devuelto debe coincidir exacto con el pedido, e `is_active` debe ser true.
+8. **Sanitización completa de la rutina compartida:** `SharedRoutineSanitizer.sanitize()` recorta nombres/descripciones, rango de series/reps/descanso, normaliza días (1..7), deduplica ejercicios por `(exerciseId, dayNumber)`, y limita a 100 ejercicios totales → devuelve null si hay más (error `SHARED_ROUTINE_INVALID`). Nombre importado: `"<original> (importada)"` recortado a 50 caracteres totales. `dayNumber` fuera de rango se pone en `UNASSIGNED_DAY_NUMBER` (0).
+9. **`ShareRoutineUseCase(userId, routine: RoutineDetail)`:** genera un código con `SecureRandom` y reintenta ante `Conflict` hasta 3 intentos en total (no 3 reintentos). Nunca comparte una rutina con `userId !=` del parámetro (defensa B2). `findActiveShare` falla → propaga el error sin crear ciego.
+10. **Puertos nuevos:** `ImageRepository` (interfaz, impl en `data/image/`) y `WorkoutExportRepository` (interfaz, impl en `data/export/`) para no mezclar lógica de IO/canvas en `domain/`.
+11. **Sin cambios:** Gradle, AndroidManifest.xml, Room schema, backend.
+12. **Compilación:** 234 tests de dominio y helpers puros pasan en arnés JVM. Tests Gradle (ViewModel/Feature, 100+) están escritos pero sin compilar (sin Android SDK en el ambiente de implementación). Sin verificación en dispositivo real del deep link, del diseño visual PDF/historia, ni de la limpieza de archivos temporales.
+
 ### FASE 7: Endurecimiento y release
 
 1. **`app/proguard-rules.pro`:**
@@ -1291,7 +1306,28 @@ El botón primario usa un gradiente horizontal `#F4FFC6 → #C7EF00` con texto `
 5. **Accesibilidad:** `contentDescription` en iconos accionables y objetivos táctiles ≥48 dp.
 6. **Comprobaciones finales:** `./gradlew clean assembleDebug testDebugUnitTest lintDebug assembleRelease`. Verificar con `grep` que `app/build/outputs/apk/release/*.apk` no contiene la cadena "localhost" ni `http://`, y que `BuildConfig` release no expone nada fuera de URL y anon key.
 
-**Aceptación de la fase 7:** los cuatro comandos en verde; R8 activo (`mapping.txt` generado); ningún log de debug en release.
+**Aceptación de la fase 7:** Parte A: arneses JVM (p7h 473 tests, harness 234) en verde; `verifyReleaseConfig` en 3 escenarios sin imprimir secretos. Parte B (en máquina del usuario): `assembleDebug`, `testDebugUnitTest`, `lintDebug`, `assembleRelease` en verde; R8 activo (`mapping.txt` generado); ningún log de debug en release; nombre `SyncWorkoutsWorker` preservado en `mapping.txt`.
+
+### Desviaciones de FASE 7 (registradas durante la implementación Parte A)
+
+1. **ProGuard:** No se agregan reglas redundantes (kotlinx-serialization, Ktor, OkHttp, Tink, Coil, Hilt traen sus propias consumer-rules.pro verificadas contra Maven). Se agregan: `-dontwarn java.lang.management.*` (Ktor referencia JVM-only); strip de `Log` (v, d, i, w, e, wtf, println); `SourceFile`/`LineNumberTable` para stack traces legibles. **No** se agrega `-keep` de app code ni `-dontobfuscate` global.
+
+2. **`lint-baseline.xml` no creado:** la configuración es condicional (solo carga si existe). Para crear: `./gradlew :app:updateLintBaseline` en máquina del usuario tras limpiar issues de app code.
+
+3. **`data_extraction_rules.xml` arreglado como bug de seguridad real:** antes solo excluía `root`; sesión, keyset y entrenamientos **sí** se transferían en device-to-device. Ahora excluye cinco dominios (root, file, database, sharedpref, external).
+
+4. **`verifyReleaseConfig` más estricto:** valida que si `keystore.properties` existe, tenga todos los campos completos (no solo que el archivo exista). Nunca imprime secretos. Sin keystore → APK unsigned (válido para testing).
+
+5. **Correcciones fuera del alcance estricto de release pero necesarias:**
+   - Crash API < 34: `LocalDate.ofInstant` → `timeProvider.now().atZone(...).dayOfWeek` (venía de FASE 4).
+   - `@OptIn(UnstableApi)` Media3 en `ExerciseMedia.LoopingVideo`.
+   - `SecurityException` en `RestTimerReceiver.notify()` y fallback en `RestTimerAlarmScheduler`.
+   - Guard de `ImportCodeViewModel` usa `status.value` (WhileSubscribed).
+   - 15 tests de FASES 5-6 corregidos (`runCurrent()`, `CompletableDeferred` gates).
+
+6. **Accesibilidad de reordenar con TalkBack (acciones personalizadas):** deferred.
+
+7. **String propio `import_image_no_gallery_app`:** en lugar de reutilizar `share_no_app` (contexto diferente: "No hay app de galería" vs "No hay app para compartir").
 
 ---
 

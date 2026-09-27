@@ -1,10 +1,10 @@
 # Estructura del proyecto
 
 Árbol verificado contra `app/src/main/java/com/lucho314/spotter/` y `app/src/test/java/com/lucho314/spotter/`
-tras FASES 1-5 (FASES 1-4 compiladas/testeadas en máquina; FASE 5 código escrito, 147 tests de
-dominio verificados en arnés JVM, resto sin compilar por falta de SDK). Un solo módulo Gradle `:app`.
-Los paquetes/archivos marcados **(planificado)** no existen todavía — ver `docs/arquitectura.md`
-sección "Planificado".
+tras FASES 1-7 (FASES 1-4 compiladas/testeadas en máquina; FASES 5-7 código escrito, 473 tests de
+dominio, ViewModels y datos verificados en un arnés JVM, resto sin compilar por falta de SDK).
+Un solo módulo Gradle `:app`. Archivos nuevos de FASE 7: `proguard-rules.pro` (reescrito),
+`keystore.properties.example`, `data_extraction_rules.xml` (arreglado).
 
 ## Raíz
 
@@ -35,21 +35,21 @@ SpotterApp.kt         @HiltAndroidApp; Configuration.Provider (HiltWorkerFactory
 
 | Paquete | Archivos | Contenido |
 |---|---|---|
-| `domain/model/` | `ActiveWorkoutModels.kt`, `AuthModels.kt`, `DashboardModels.kt` (`DashboardStats`, sin consumidores aún), `ExerciseModels.kt`, `PendingWorkoutModels.kt`, `ProfileModels.kt`, `ProgressModels.kt`, `RoutineModels.kt`, `ShareCode.kt`, `SharingModels.kt`, `TemplateModels.kt`, `WeightUnit.kt`, `WorkoutModels.kt` | Data classes / enums / sealed interfaces del dominio |
-| `domain/repository/` | 12 interfaces + `LocalDataRepository.kt` (FASE 5) | Contratos que implementa `data/repository` |
-| `domain/usecase/` | `AdoptTemplateUseCase.kt` (FASE 3); `StartWorkoutUseCase.kt`, `UpdateSetInputUseCase.kt`, `ToggleSetCompletionUseCase.kt`, `FinishWorkoutUseCase.kt`, `DiscardWorkoutUseCase.kt`, `SyncPendingWorkoutsUseCase.kt` (FASE 4); `GetDashboardStatsUseCase.kt`, `GetExerciseProgressUseCase.kt`, `GetProfileOverviewUseCase.kt`, `UpdateProfileUseCase.kt`, `SignOutUseCase.kt` (FASE 5) | Los use cases de FASE 6 se difieren a esa fase |
-| `domain/calc/` | `ActiveSetWeight.kt`, `AgeCalculator.kt`, `ExerciseProgressAggregator.kt`, `NumberFormatter.kt`, `RoutineOrdering.kt`, `SetInputValidator.kt` (FASE 5), `SpanishWeekdays.kt`, `Validators.kt`, `WeekRange.kt`, `WeightConverter.kt`, `WeightInputParser.kt`, `WorkoutMath.kt` | Cálculos puros, 100% cubiertos por tests unitarios |
+| `domain/model/` | `ActiveWorkoutModels.kt`, `AuthModels.kt`, `AiImportModels.kt` (FASE 6), `DashboardModels.kt` (`DashboardStats`), `ExerciseModels.kt`, `PendingWorkoutModels.kt`, `ProfileModels.kt`, `ProgressModels.kt`, `RoutineModels.kt`, `ShareCode.kt`, `SharingModels.kt` (con `SanitizedSharedRoutine` FASE 6), `TemplateModels.kt`, `WeightUnit.kt`, `WorkoutExportModels.kt` (FASE 6), `WorkoutModels.kt` | Data classes / enums / sealed interfaces del dominio |
+| `domain/repository/` | 12 interfaces + `LocalDataRepository.kt` (FASE 5) + `ImageRepository.kt`, `WorkoutExportRepository.kt` (FASE 6) | Contratos que implementa `data/repository` |
+| `domain/usecase/` | `AdoptTemplateUseCase.kt` (FASE 3); `StartWorkoutUseCase.kt`, `UpdateSetInputUseCase.kt`, `ToggleSetCompletionUseCase.kt`, `FinishWorkoutUseCase.kt`, `DiscardWorkoutUseCase.kt`, `SyncPendingWorkoutsUseCase.kt` (FASE 4); `GetDashboardStatsUseCase.kt`, `GetExerciseProgressUseCase.kt`, `GetProfileOverviewUseCase.kt`, `UpdateProfileUseCase.kt`, `SignOutUseCase.kt` (FASE 5); `ShareRoutineUseCase.kt`, `ImportSharedRoutineUseCase.kt`, `ImportRoutineFromImageUseCase.kt`, `BuildWorkoutExportUseCase.kt` (FASE 6) | Use cases del dominio |
+| `domain/calc/` | `ActiveSetWeight.kt`, `AgeCalculator.kt`, `ExerciseProgressAggregator.kt`, `ExerciseSetGrouping.kt` (FASE 6), `NumberFormatter.kt`, `RoutineOrdering.kt`, `SetInputValidator.kt` (FASE 5), `SharedRoutineSanitizer.kt` (FASE 6), `SpanishWeekdays.kt`, `TextSanitizer.kt` (FASE 6), `Validators.kt`, `WeekRange.kt`, `WeightConverter.kt`, `WeightInputParser.kt`, `WorkoutExportDataBuilder.kt` (FASE 6), `WorkoutMath.kt` | Cálculos puros, 100% cubiertos por tests unitarios |
 
 ## `data/` — implementación de datos
 
 | Paquete | Archivos | Contenido |
 |---|---|---|
-| `data/remote/dto/` | `Dtos.kt` | DTOs `@Serializable` con `@SerialName` snake_case, espejo del esquema Supabase |
-| `data/remote/datasource/` | Interfaz + `Supabase*RemoteDataSource` para: `AiImportRemoteDataSource`, `AuthDataSource`, `ExerciseRemoteDataSource`, `ProfileRemoteDataSource`, `ProgressRemoteDataSource`, `RoutineRemoteDataSource`, `SharingRemoteDataSource`, `TemplateRemoteDataSource`, `WorkoutRemoteDataSource`; más `DataSourceModule.kt` (`@Binds`) | Acceso a Supabase (Postgrest/Auth/Functions) detrás de interfaces, para poder testear los repos con fakes |
-| `data/mapper/` | `ActiveWorkoutEntityMapper.kt`, `AuthStateMapper.kt`, `AuthUserMapper.kt`, `DateMappers.kt`, `ExerciseMapper.kt`, `PendingWorkoutMapper.kt`, `ProfileMapper.kt`, `ProgressMapper.kt`, `RoutineMapper.kt`, `SharingMapper.kt`, `TemplateMapper.kt`, `WorkoutMapper.kt` | DTO ↔ dominio y entidad Room ↔ dominio |
-| `data/repository/` | `ActiveWorkoutRepositoryImpl.kt`, `AiImportRepositoryImpl.kt`, `AuthRepositoryImpl.kt`, `ExerciseRepositoryImpl.kt`, `LocalDataRepositoryImpl.kt` (FASE 5), `PendingWorkoutRepositoryImpl.kt`, `PreferencesRepositoryImpl.kt`, `ProfileRepositoryImpl.kt`, `ProgressRepositoryImpl.kt`, `RepositoryModule.kt` (`@Binds`), `RoutineRepositoryImpl.kt`, `SharingRepositoryImpl.kt`, `TemplateRepositoryImpl.kt`, `WorkoutHistoryRepositoryImpl.kt` | Las 12 + 1 (FASE 5) implementaciones de `domain/repository` |
-| `data/export/` **(planificado)** | — | Generación de PDF/JPEG de entrenamientos (FASE 6) |
-| `data/image/` **(planificado)** | — | Compresión/EXIF/base64 para la importación con IA (FASE 6) |
+| `data/remote/dto/` | `Dtos.kt` (con DTOs nuevos `SharedRoutineImportDto` FASE 6) | DTOs `@Serializable` con `@SerialName` snake_case, espejo del esquema Supabase |
+| `data/remote/datasource/` | Interfaz + `Supabase*RemoteDataSource` para: `AiImportRemoteDataSource`, `AuthDataSource`, `ExerciseRemoteDataSource`, `ProfileRemoteDataSource`, `ProgressRemoteDataSource`, `RoutineRemoteDataSource`, `SharingRemoteDataSource` (actualizada FASE 6), `TemplateRemoteDataSource`, `WorkoutRemoteDataSource`; más `DataSourceModule.kt` (`@Binds`) | Acceso a Supabase (Postgrest/Auth/Functions) detrás de interfaces, para poder testear los repos con fakes |
+| `data/mapper/` | `ActiveWorkoutEntityMapper.kt`, `AuthStateMapper.kt`, `AuthUserMapper.kt`, `DateMappers.kt`, `ExerciseMapper.kt`, `PendingWorkoutMapper.kt`, `ProfileMapper.kt`, `ProgressMapper.kt`, `RoutineMapper.kt`, `SharingMapper.kt` (actualizado FASE 6), `TemplateMapper.kt`, `WorkoutMapper.kt` | DTO ↔ dominio y entidad Room ↔ dominio |
+| `data/repository/` | `ActiveWorkoutRepositoryImpl.kt`, `AiImportErrorMapper.kt` (FASE 6), `AiImportRepositoryImpl.kt` (actualizado FASE 6), `AuthRepositoryImpl.kt`, `ExerciseRepositoryImpl.kt`, `ImageRepositoryImpl.kt` (FASE 6), `LocalDataRepositoryImpl.kt` (FASE 5), `PendingWorkoutRepositoryImpl.kt`, `PreferencesRepositoryImpl.kt`, `ProfileRepositoryImpl.kt`, `ProgressRepositoryImpl.kt`, `RepositoryModule.kt` (`@Binds`), `RoutineRepositoryImpl.kt`, `SharingRepositoryImpl.kt` (actualizado FASE 6), `TemplateRepositoryImpl.kt`, `WorkoutExportRepositoryImpl.kt` (FASE 6), `WorkoutHistoryRepositoryImpl.kt` | Las 12 + 2 implementaciones de `domain/repository` (FASE 6) |
+| `data/export/` | `ExportFileNames.kt`, `ExportFileWriter.kt`, `ExportPalette.kt`, `PageCursor.kt`, `WorkoutExportRepositoryImpl.kt`, `WorkoutPdfRenderer.kt`, `WorkoutStoryRenderer.kt` | Generación de PDF/JPEG de entrenamientos (FASE 6) |
+| `data/image/` | `ImageRepositoryImpl.kt`, `ImageSizing.kt` | Compresión/EXIF/base64 para la importación con IA (FASE 6) |
 
 ## `feature/` — pantallas (Compose + ViewModel)
 
@@ -58,7 +58,7 @@ feature/
 ├── auth/                    LoginScreen/ViewModel, OnboardingScreen/ViewModel, GoogleCredentialClient, NonceGenerator
 ├── root/                    SpotterRoot, RootViewModel (guardia de sesión + deep link pendiente), ConfigErrorScreen
 ├── common/                  ObserveAsEvents, ErrorMessages, ValidationMessages, RoutineExerciseSummary, 
-│                            ComingSoonScreen (placeholder), ActiveWorkoutBanner (FASE 5),
+│                            ShareIntents (FASE 6), ActiveWorkoutBanner (FASE 5),
 │                            DateFormats (FASE 5), SectionState (FASE 5)
 ├── profile/                 ProfileScreen/ViewModel — identidad, datos físicos, estadísticas, 
 │                            unidad kg/lb, cerrar sesión con SignOutUseCase (FASE 5)
@@ -68,13 +68,16 @@ feature/
 │   ├── list/                RoutinesScreen/ViewModel, ArchivedRoutinesScreen/ViewModel
 │   ├── edit/                RoutineEditScreen/ViewModel (crear y editar)
 │   ├── detail/               RoutineDetailScreen/ViewModel (días, drag&drop, mover de día, agregar ejercicio)
+│   │                        con ShareRoutineUseCase (FASE 6)
 │   └── addexercise/          AddExerciseScreen/ViewModel
 ├── templates/                TemplateLabels, list/TemplatesScreen/ViewModel, detail/TemplateDetailScreen/ViewModel
 ├── dashboard/               DashboardScreen/ViewModel (FASE 5), DashboardFormatters (FASE 5)
 ├── workout/                 WorkoutScreen/ViewModel (entrenamiento activo, timers, series, último entrenamiento)
-├── history/                 list/HistoryScreen/ViewModel, detail/SessionDetailScreen/ViewModel (FASE 5)
+├── history/                 list/HistoryScreen/ViewModel, detail/SessionDetailScreen/ViewModel (FASE 5,
+│                            con BuildWorkoutExportUseCase FASE 6), share/ShareWorkoutSheet (FASE 6)
 ├── progress/                ProgressScreen/ViewModel (FASE 5)
-└── importroutine/(planificado — ImportCodeRoute/ImportImageRoute hoy renderizan ComingSoonScreen)
+└── importroutine/           code/ImportCodeScreen/ViewModel, image/ImportImageScreen/ViewModel,
+                             image/AiImportErrorKind (FASE 6)
 ```
 
 ## Recursos (`app/src/main/res/`)
@@ -96,15 +99,21 @@ compartidos (`FakeAead`, `FakeAuthDataSource`, `FakeAuthRepository`, `FakeExerci
 Los tests de Room (`ActiveWorkoutDaoTest`, `CachedPayloadDaoTest`, `LocalDataRepositoryImplTest` (FASE 5),
 `PendingWorkoutDaoTest`) corren con Robolectric sobre una base en memoria.
 
-**458 `@Test`** en el código tras FASE 5 (conteo de anotaciones); 147 de dominio + helpers verificados
-sin SDK en arnés JVM, resto sin compilar. Tests de FASE 5 nuevos: `GetDashboardStatsUseCaseTest`,
-`GetExerciseProgressUseCaseTest`, `GetProfileOverviewUseCaseTest`, `UpdateProfileUseCaseTest`,
-`SignOutUseCaseTest`, `SetInputValidatorTest`, `HistoryViewModelTest`, `SessionDetailViewModelTest`,
-`ProgressViewModelTest`, `DashboardViewModelTest`, `DashboardFormattersTest`, `ProfileViewModelTest`
-(reescrita), `WorkoutViewModelTest` (con caso `closing`), `LocalDataRepositoryImplTest`, `ProfileRepositoryImplTest`,
-`LineChartGeometryTest`, `BirthDateInputTest`, `SpotterDateFormatsTest`. Tests de FASE 4 anteriores
-aún presentes: `StartWorkoutUseCaseTest`, `ToggleSetCompletionUseCaseTest`, `FinishWorkoutUseCaseTest`,
-`SyncPendingWorkoutsUseCaseTest`, `SyncWorkoutsWorkerTest` (Robolectric), `RestTimerTest`, etc.
+**571 `@Test`** en el código tras FASE 7 (conteo de anotaciones); 473 (dominio, ViewModels,
+capa de datos y navegación) verificados sin SDK en un arnés JVM, resto sin compilar. Tests de FASE 7 (correcciones):
+agregado `runCurrent()` en `DashboardViewModelTest`, `HistoryViewModelTest`, `ProgressViewModelTest`,
+`ProfileViewModelTest`, `SessionDetailViewModelTest`; `CompletableDeferred` gates en
+`FakeImageRepository`/`FakeRoutineRepository` para tests de doble toque (`ImportImageViewModelTest`,
+`ImportCodeViewModelTest`); `@OptIn(ExperimentalCoroutinesApi)` agregado a `ImportCodeViewModelTest`.
+Tests nuevos de FASE 6: `TextSanitizerTest`, `SharedRoutineSanitizerTest`, `ExerciseSetGroupingTest`,
+`WorkoutExportDataBuilderTest`, `ShareRoutineUseCaseTest`, `ImportSharedRoutineUseCaseTest`,
+`ImportRoutineFromImageUseCaseTest`, `BuildWorkoutExportUseCaseTest`, `AiImportErrorKindTest`, `ImageSizingTest`,
+`PageCursorTest`, `ExportFileNamesTest`, `DeepLinkParserTest`, `RouteArgsTest`, `RoutineDetailViewModelTest`,
+`SessionDetailViewModelTest` (con `onExport`), `ImportCodeViewModelTest`, `ImportImageViewModelTest`, `AiImportRepositoryImplTest`,
+`SharingRepositoryImplTest`, `DtoDecodingTest`. Tests de FASE 5: `GetDashboardStatsUseCaseTest`, `GetExerciseProgressUseCaseTest`,
+`GetProfileOverviewUseCaseTest`, `UpdateProfileUseCaseTest`, `SignOutUseCaseTest`, `SetInputValidatorTest`, `HistoryViewModelTest`,
+`ProgressViewModelTest`, `DashboardViewModelTest`, `DashboardFormattersTest`, `ProfileViewModelTest`, `WorkoutViewModelTest`,
+`LocalDataRepositoryImplTest`, `ProfileRepositoryImplTest`, `LineChartGeometryTest`, `BirthDateInputTest`, `SpotterDateFormatsTest`.
 
 ## Documentación (`docs/`)
 

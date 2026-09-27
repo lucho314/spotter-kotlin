@@ -71,7 +71,7 @@ class SignOutUseCase @Inject constructor(
             try {
                 preferencesRepository.clearUserScoped()
             } catch (e: IOException) {
-                logger.w(TAG, "clearUserScoped failed: ${e.message}")
+                logger.w(TAG, "clearUserScoped failed: ${e::class.simpleName}")
             }
             result
         }

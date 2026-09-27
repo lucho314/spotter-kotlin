@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
@@ -23,10 +25,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -127,7 +132,10 @@ fun DashboardScreen(
                             text = pluralStringResource(R.plurals.pending_sync_count, uiState.pendingSyncCount, uiState.pendingSyncCount),
                             style = MaterialTheme.typography.bodyMedium,
                             color = SpotterColors.Secondary,
-                            modifier = Modifier.fillMaxWidth().clickable(onClick = onPendingClick).padding(vertical = Spacing.xxs),
+                            modifier = Modifier.fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .clickable(role = Role.Button, onClick = onPendingClick)
+                                .wrapContentHeight(Alignment.CenterVertically),
                         )
                     }
                 }

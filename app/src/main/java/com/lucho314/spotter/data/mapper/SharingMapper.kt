@@ -1,12 +1,12 @@
 package com.lucho314.spotter.data.mapper
 
-import com.lucho314.spotter.data.remote.dto.SharedRoutineDto
+import com.lucho314.spotter.data.remote.dto.SharedRoutineImportDto
 import com.lucho314.spotter.domain.model.SharedRoutineContent
 import com.lucho314.spotter.domain.model.SharedRoutineDay
 import com.lucho314.spotter.domain.model.SharedRoutineExercise
 
 /** Null if the nested `routines(...)` relation wasn't loaded (shouldn't happen given the query in [com.lucho314.spotter.data.remote.datasource.SharingRemoteDataSource]). */
-fun SharedRoutineDto.toDomain(): SharedRoutineContent? {
+fun SharedRoutineImportDto.toDomain(): SharedRoutineContent? {
     val routineDto = routine ?: return null
     return SharedRoutineContent(
         routineName = routineDto.name,

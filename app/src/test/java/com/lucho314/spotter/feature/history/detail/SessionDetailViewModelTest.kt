@@ -5,11 +5,14 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.lucho314.spotter.core.common.AppError
 import com.lucho314.spotter.core.common.AppResult
+import com.lucho314.spotter.domain.model.ExportFormat
 import com.lucho314.spotter.domain.model.WeightUnit
 import com.lucho314.spotter.domain.model.WorkoutSessionDetail
 import com.lucho314.spotter.domain.model.WorkoutSet
+import com.lucho314.spotter.domain.usecase.BuildWorkoutExportUseCase
 import com.lucho314.spotter.testutil.FakePreferencesRepository
 import com.lucho314.spotter.testutil.FakeTimeProvider
+import com.lucho314.spotter.testutil.FakeWorkoutExportRepository
 import com.lucho314.spotter.testutil.FakeWorkoutHistoryRepository
 import com.lucho314.spotter.testutil.MainDispatcherRule
 import java.time.Instant
@@ -34,9 +37,11 @@ class SessionDetailViewModelTest {
     private val workoutHistoryRepository = FakeWorkoutHistoryRepository()
     private val preferencesRepository = FakePreferencesRepository()
     private val timeProvider = FakeTimeProvider()
+    private val workoutExportRepository = FakeWorkoutExportRepository()
 
     private fun viewModel() = SessionDetailViewModel(
         SavedStateHandle(mapOf("sessionId" to "s1")), workoutHistoryRepository, preferencesRepository, timeProvider,
+        BuildWorkoutExportUseCase(timeProvider), workoutExportRepository,
     )
 
     private fun set(id: String, exerciseId: Int, exerciseName: String?, setNumber: Int, weightKg: Double = 80.0, reps: Int = 10, completedAt: Instant = Instant.EPOCH) =
@@ -178,5 +183,66 @@ class SessionDetailViewModelTest {
         collectUiState(vm)
 
         assertThat(vm.uiState.value.loadErrorRes).isNotNull()
+    }
+
+    @Test
+    fun `onExport PDF emits ShareFile and clears exporting afterwards`() = runTest(testDispatcher) {
+        workoutHistoryRepository.sessionResult = AppResult.Success(detail(listOf(set("a1", 1, "Press", 1))))
+        workoutExportRepository.result = AppResult.Success(com.lucho314.spotter.domain.model.ExportedFile("content://f", "application/pdf"))
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.events.test {
+            vm.onExport(ExportFormat.PDF)
+            val event = awaitItem() as SessionDetailEvent.ShareFile
+            assertThat(event.uri).isEqualTo("content://f")
+            assertThat(event.mimeType).isEqualTo("application/pdf")
+        }
+        runCurrent()
+        assertThat(vm.uiState.value.exporting).isNull()
+    }
+
+    @Test
+    fun `onExport failure reports ActionFailed`() = runTest(testDispatcher) {
+        workoutHistoryRepository.sessionResult = AppResult.Success(detail(listOf(set("a1", 1, "Press", 1))))
+        workoutExportRepository.result = AppResult.Failure(com.lucho314.spotter.core.common.AppError.Unknown())
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.events.test {
+            vm.onExport(ExportFormat.PDF)
+            assertThat(awaitItem()).isEqualTo(SessionDetailEvent.ActionFailed(com.lucho314.spotter.R.string.share_workout_error))
+        }
+    }
+
+    @Test
+    fun `a second onExport while one is in flight is ignored`() = runTest(testDispatcher) {
+        workoutHistoryRepository.sessionResult = AppResult.Success(detail(listOf(set("a1", 1, "Press", 1))))
+        val gate = CompletableDeferred<Unit>()
+        workoutExportRepository.gate = gate
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.onExport(ExportFormat.PDF)
+        runCurrent()
+        vm.onExport(ExportFormat.STORY)
+        runCurrent()
+        gate.complete(Unit)
+        runCurrent()
+
+        assertThat(workoutExportRepository.exported).hasSize(1)
+    }
+
+    @Test
+    fun `exporting with LB preferences uses the lb unit label`() = runTest(testDispatcher) {
+        preferencesRepository.setWeightUnit(WeightUnit.LB)
+        workoutHistoryRepository.sessionResult = AppResult.Success(detail(listOf(set("a1", 1, "Press", 1))))
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.onExport(ExportFormat.PDF)
+        runCurrent()
+
+        assertThat(workoutExportRepository.exported.single().first.unitLabel).isEqualTo("lb")
     }
 }

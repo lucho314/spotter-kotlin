@@ -70,6 +70,7 @@ fun ExerciseMedia(
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun LoopingVideo(url: String, onError: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current

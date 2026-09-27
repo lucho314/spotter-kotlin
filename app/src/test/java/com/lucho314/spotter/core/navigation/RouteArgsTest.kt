@@ -45,4 +45,9 @@ class RouteArgsTest {
     fun `SessionDetailRoute has a sessionId field matching RouteArgs`() {
         assertThat(fieldNames(SessionDetailRoute::class.java)).contains(RouteArgs.SESSION_ID)
     }
+
+    @Test
+    fun `ImportCodeRoute has a code field matching RouteArgs`() {
+        assertThat(fieldNames(ImportCodeRoute::class.java)).contains(RouteArgs.CODE)
+    }
 }

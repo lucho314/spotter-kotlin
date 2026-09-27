@@ -3,7 +3,6 @@ package com.lucho314.spotter.core.notifications
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import androidx.core.content.getSystemService
 import com.lucho314.spotter.R
 
@@ -12,7 +11,7 @@ const val REST_TIMER_CHANNEL_ID = "rest_timer"
 /** Creates the app's notification channels. Safe to call on every process start ([androidx.core.app.NotificationManagerCompat.createNotificationChannel] is idempotent). */
 object NotificationChannels {
     fun create(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        // minSdk is 26 (O): notification channels always exist, no SDK_INT guard needed.
         val manager = context.getSystemService<NotificationManager>() ?: return
         val channel = NotificationChannel(
             REST_TIMER_CHANNEL_ID,

@@ -54,7 +54,11 @@ class RestTimerReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
-        NotificationManagerCompat.from(context).notify(REST_FINISHED_NOTIFICATION_ID, notification)
+        try {
+            NotificationManagerCompat.from(context).notify(REST_FINISHED_NOTIFICATION_ID, notification)
+        } catch (e: SecurityException) {
+            // Permission revoked between the check above and this call: nothing to show, drop it.
+        }
     }
 
     private fun hasNotificationPermission(context: Context): Boolean {

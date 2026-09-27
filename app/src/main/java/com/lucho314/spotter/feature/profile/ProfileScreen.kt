@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -268,8 +272,12 @@ private fun ProfileStatsRow(stats: ProfileStats?, unavailable: Boolean) {
 @Composable
 private fun ProfileFieldRow(label: String, value: String, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = Spacing.xs),
+        modifier = Modifier.fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClickLabel = stringResource(R.string.generic_edit), role = Role.Button, onClick = onClick)
+            .padding(vertical = Spacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text = label, style = MaterialTheme.typography.bodyLarge, color = SpotterColors.OnSurface)
         Text(text = value, style = MaterialTheme.typography.bodyLarge, color = SpotterColors.OnSurfaceVariant)
@@ -370,13 +378,15 @@ private fun GoalEditDialog(current: ProfileGoal?, onDismiss: () -> Unit, onConfi
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.profile_edit_goal_title)) },
         text = {
-            Column {
+            Column(Modifier.selectableGroup()) {
                 options.forEach { option ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable { onConfirm(option) },
+                        modifier = Modifier.fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .selectable(selected = option == current, role = Role.RadioButton, onClick = { onConfirm(option) }),
                     ) {
-                        RadioButton(selected = option == current, onClick = { onConfirm(option) })
+                        RadioButton(selected = option == current, onClick = null)
                         Text(text = stringResource(option.labelRes()), style = MaterialTheme.typography.bodyLarge, color = SpotterColors.OnSurface)
                     }
                 }

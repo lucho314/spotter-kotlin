@@ -36,3 +36,18 @@ data class SharedRoutineExercise(
     val targetReps: Int,
     val restSeconds: Int,
 )
+
+/**
+ * Output of [com.lucho314.spotter.domain.calc.SharedRoutineSanitizer.sanitize]: exactly what
+ * [com.lucho314.spotter.domain.usecase.ImportSharedRoutineUseCase] will insert.
+ */
+data class SanitizedSharedRoutine(
+    /** For the preview screen (no " (importada)" suffix). */
+    val originalName: String,
+    /** Name already suffixed as "<name> (importada)", clamped to 50 chars. */
+    val input: RoutineInput,
+    /** (dayNumber 1..7, name), distinct by dayNumber. */
+    val days: List<Pair<Int, String>>,
+    /** (exercise, sortOrder). */
+    val exercises: List<Pair<NewRoutineExercise, Int>>,
+)

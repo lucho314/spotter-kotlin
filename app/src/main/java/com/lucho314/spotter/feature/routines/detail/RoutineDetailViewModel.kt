@@ -12,6 +12,7 @@ import com.lucho314.spotter.core.common.ValidationReason
 import com.lucho314.spotter.core.navigation.RouteArgs
 import com.lucho314.spotter.domain.calc.RoutineOrdering
 import com.lucho314.spotter.domain.calc.SpanishWeekdays
+import com.lucho314.spotter.domain.calc.TextSanitizer
 import com.lucho314.spotter.domain.calc.Validators
 import com.lucho314.spotter.domain.model.ActiveWorkout
 import com.lucho314.spotter.domain.model.RoutineDay
@@ -21,11 +22,11 @@ import com.lucho314.spotter.domain.model.RoutineExercisePatch
 import com.lucho314.spotter.domain.repository.AuthRepository
 import com.lucho314.spotter.domain.repository.RoutineRepository
 import com.lucho314.spotter.domain.usecase.DaySelection
+import com.lucho314.spotter.domain.usecase.ShareRoutineUseCase
 import com.lucho314.spotter.domain.usecase.StartResult
 import com.lucho314.spotter.domain.usecase.StartWorkoutUseCase
 import com.lucho314.spotter.feature.common.toMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +56,8 @@ data class RoutineDetailUiState(
     val reorderRevision: Int = 0,
     /** Set only when there is no cached routine to show at all and the initial load failed. */
     @StringRes val loadErrorRes: Int? = null,
+    /** True while [RoutineDetailViewModel.onShareClick] is finding/creating a share code. */
+    val sharing: Boolean = false,
 ) {
     val usedDayNames: Set<String> get() = routine?.days.orEmpty().mapTo(mutableSetOf()) { it.name }
     val canStartWorkout: Boolean get() = routine?.exercises?.isNotEmpty() == true
@@ -68,6 +71,9 @@ sealed interface RoutineDetailEvent {
 
     /** RN bug #6: [existing] is already in progress; the screen must ask "Continuar o descartar y empezar" instead of silently overwriting it. */
     data class WorkoutAlreadyActive(val existing: ActiveWorkout) : RoutineDetailEvent
+
+    /** A share code is ready to be shared/copied - either reused or freshly created. */
+    data class ShareCodeReady(val routineName: String, val code: String) : RoutineDetailEvent
 }
 
 @HiltViewModel
@@ -75,6 +81,7 @@ class RoutineDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val routineRepository: RoutineRepository,
     private val startWorkoutUseCase: StartWorkoutUseCase,
+    private val shareRoutineUseCase: ShareRoutineUseCase,
     private val timeProvider: TimeProvider,
     authRepository: AuthRepository,
 ) : ViewModel() {
@@ -87,6 +94,7 @@ class RoutineDetailViewModel @Inject constructor(
     private val initialLoadDone = MutableStateFlow(false)
     private val initialLoadError = MutableStateFlow<Int?>(null)
     private val reorderRevision = MutableStateFlow(0)
+    private val sharing = MutableStateFlow(false)
 
     private val eventChannel = Channel<RoutineDetailEvent>(Channel.BUFFERED)
     val events: Flow<RoutineDetailEvent> = eventChannel.receiveAsFlow()
@@ -96,13 +104,15 @@ class RoutineDetailViewModel @Inject constructor(
         initialLoadDone,
         initialLoadError,
         reorderRevision,
-    ) { routine, loadDone, loadError, revision ->
+        sharing,
+    ) { routine, loadDone, loadError, revision, isSharing ->
         RoutineDetailUiState(
             loading = routine == null && !loadDone,
             routine = routine,
             dayGroups = routine?.let(::buildDayGroups).orEmpty(),
             reorderRevision = revision,
             loadErrorRes = if (routine == null && loadDone) loadError else null,
+            sharing = isSharing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RoutineDetailUiState())
 
@@ -251,7 +261,7 @@ class RoutineDetailViewModel @Inject constructor(
     }
 
     /** Today's Spanish weekday name, used to preselect it in `DayPickerSheet` (RN bug #7 fix). */
-    fun todayWeekdayName(): String = SpanishWeekdays.of(LocalDate.ofInstant(timeProvider.now(), timeProvider.zone()).dayOfWeek)
+    fun todayWeekdayName(): String = SpanishWeekdays.of(timeProvider.now().atZone(timeProvider.zone()).dayOfWeek)
 
     /**
      * [replaceExisting] is only ever `true` when the user explicitly picked "Descartar y empezar"
@@ -268,6 +278,28 @@ class RoutineDetailViewModel @Inject constructor(
                 }
 
                 is AppResult.Failure -> reportFailure(result.error)
+            }
+        }
+    }
+
+    /** Reuses the routine's active share code, or creates a new one; guarded against double-tap via [sharing]. */
+    fun onShareClick() {
+        val routine = uiState.value.routine ?: return
+        if (sharing.value) return
+        sharing.value = true
+        viewModelScope.launch {
+            try {
+                when (val result = shareRoutineUseCase(userId, routine)) {
+                    is AppResult.Success -> eventChannel.send(
+                        RoutineDetailEvent.ShareCodeReady(
+                            routineName = TextSanitizer.singleLine(routine.name, 50) ?: routine.name,
+                            code = result.value.value,
+                        ),
+                    )
+                    is AppResult.Failure -> reportFailure(result.error)
+                }
+            } finally {
+                sharing.value = false
             }
         }
     }

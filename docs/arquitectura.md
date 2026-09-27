@@ -1,9 +1,8 @@
 # Arquitectura de Spotter
 
-Estado: refleja el código tras **FASES 1-5** (FASES 1-4 aprobadas el 2026-09-26; FASE 5 implementada
-sin revisión independiente ni compilación de Android, solo 147 tests de dominio verificados en
-arnés JVM). La sección final "Planificado" documenta lo que el plan define para FASES 6-7 y que
-**no existe todavía** en el código.
+Estado: refleja el código tras **FASES 1-7** (FASES 1-4 aprobadas el 2026-09-26; FASES 5-7
+implementadas sin revisión independiente; FASES 5-6 sin compilación de Android; 473 tests de
+dominio/data/ViewModel verificados en arnés JVM; 571 @Test totales escritos).
 
 ## Visión general
 
@@ -175,7 +174,7 @@ borrado de Room falla, no cierra sesión y reprograma la sincronización para re
 - Rutas `@Serializable` (`core/navigation/Routes.kt`) en un único `NavHost` (`SpotterNavHost`)
   dentro de la raíz autenticada. La barra inferior (`TopLevelDestination`: Dashboard, Rutinas,
   Historial, Progreso, Perfil) se muestra en esos 5 destinos top-level (Dashboard, Historial y
-  Progreso implementados en FASE 5; ImportCodeRoute e ImportImageRoute siguen como `ComingSoonScreen`).
+  Progreso implementados en FASE 5; ImportCodeRoute e ImportImageRoute implementadas en FASE 6).
 - Los ViewModels con argumentos de ruta leen el `SavedStateHandle` directamente por clave
   (`RouteArgs`), no con `toRoute<T>()`: se verificó que `toRoute()` no decodifica argumentos cuando
   el `SavedStateHandle` no viene de un `NavBackStackEntry` real, lo que rompía los tests con fakes
@@ -273,20 +272,62 @@ delega la política de reintento en `KeysetRecoveryPolicy`:
    (`isUsingKeystore` en falso — Tink puede escribir el keyset en claro si no puede usar el
    Keystore), se borra igual y se lanza un error.
 
+### Respaldo y transferencia device-to-device (FASE 7)
+
+`dataExtractionRules.xml` excluye cinco dominios tanto en cloud-backup como en device-transfer:
+- `root` (preferencias globales de la app).
+- `file` (DataStore con sesión cifrada).
+- `database` (Room con keyset Tink y entrenamientos).
+- `sharedpref` (keyset de Tink guardado vía `EncryptedPreferences`).
+- `external` (archivos temporales de exportación/cámara).
+
+**Bug de seguridad real (FASE 3-6):** antes solo excluía `root`. El agente `BackupAgent` recorre
+cada dominio por separado, así que sesión, keyset y entrenamientos **sí** se transferían en
+device-to-device cuando se activaba cloud backup/transfer en Android 12 o superior. Arreglado
+en FASE 7.
+
+### Ofuscación con R8 (FASE 7)
+
+`app/proguard-rules.pro` contiene solo reglas verificadas contra los artefactos Maven de cada
+librería:
+- kotlinx-serialization 1.11, Ktor 3.5, OkHttp 5, Tink, Coil, Hilt traen sus propias `consumer-rules.pro`.
+- Se agregan: `-dontwarn java.lang.management.*` (JVM-only, referenciado por Ktor pero nunca ejecutable
+  en Android); strip de `Log` (v, d, i, w, e, wtf, println) para evitar leakage de tokens/PII en release;
+  `SourceFile`/`LineNumberTable` preservados para stack traces legibles con `mapping.txt`.
+- **Nunca** se agregan reglas que oculten nombres públicos (como `-keepnames @HiltWorker class * extends ListenableWorker`
+  es necesario para que `SyncWorkoutsWorker` sea descubierto por WorkManager y se verifica en `mapping.txt`).
+
+### Firma de release (FASE 7)
+
+- Archivo `keystore.properties` (gitignored) con datos de firma opcional; `verifyReleaseConfig` valida
+  que si existe, esté completo (store password, key alias, key password y archivo existente).
+- Nunca imprimir secretos en logs o output de Gradle.
+- `signingConfigs { create("release") }` solo se define si los datos están disponibles; sin firma,
+  se genera un APK unsigned (apto para testing en emulador).
+
+### Lint y accesibilidad (FASE 7)
+
+- `lint { abortOnError = true; checkReleaseBuilds = true; warningsAsErrors = false }`.
+- Baseline (`lint-baseline.xml`) solo para issues de librerías, nunca de código de la app;
+  cargado condicionalmente si existe.
+- **Accesibilidad:** objetivos táctiles de 48 dp, `role`/`onClickLabel`/`onLongClickLabel` en
+  elementos interactivos, `selectableGroup` + `selectable` en diálogos de opción múltiple.
+
 ### Configuración del manifest y red
 
 - `android:allowBackup="false"`, `fullBackupContent="false"`, `dataExtractionRules` excluye
-  cloud-backup/device-transfer.
+  cloud-backup/device-transfer (arreglado en FASE 7).
+- `tools:targetApi="31"` en `<application>` (porque `dataExtractionRules` es API 31+).
 - `usesCleartextTraffic="false"` + `network_security_config.xml` (sin certificate pinning: el
   proyecto rota certificados en Supabase).
 - `Logger` (`AndroidLogger`) es no-op fuera de `BuildConfig.DEBUG`; nunca loguea URLs, tokens ni PII.
 - Deep links validados por `DeepLinkParser`; la importación por código exige confirmación
-  explícita del usuario (pantalla real: FASE 6, ver "Planificado").
+  explícita del usuario.
 - `POST_NOTIFICATIONS` se pide en runtime (API 33+) la primera vez que se inicia un
   entrenamiento; si se deniega, el entrenamiento sigue sin notificación.
-  `SCHEDULE_EXACT_ALARM` se usa solo si `canScheduleExactAlarms()`; si no, la alarma cae a
-  `setAndAllowWhileIdle`. `RestTimerReceiver` no está exportado y los `PendingIntent` usan
-  `FLAG_IMMUTABLE`.
+- `SCHEDULE_EXACT_ALARM` se usa solo si `canScheduleExactAlarms()`; si no, la alarma cae a
+  `setAndAllowWhileIdle` (fallback en FASE 7). `RestTimerReceiver` no está exportado y los
+  `PendingIntent` usan `FLAG_IMMUTABLE`.
 
 ### Backend (Supabase)
 
@@ -317,16 +358,6 @@ cada una a fines de FASE 4:
 | A10 | Gráfico propio en `Canvas` + `sh.calvin.reorderable` para drag & drop | Reordenamiento en `RoutineDetailScreen` (FASE 3); gráfico de progreso en `feature/progress/LineChart` (FASE 5) |
 | A11 | Exportación nativa (PDF + JPEG de "historia") | No implementado (FASE 6) |
 | A12 | Peso siempre en kg, conversión solo de presentación | `FinishWorkoutUseCase` convierte a kg (FASE 4); UI de unidad kg/lb en `ProfileScreen` (FASE 5) |
-
-## Planificado (no implementado — fases 6 a 7)
-
-Documentado acá solo para dejar explícito qué falta; **nada de lo siguiente existe en el código
-hoy**. Ver `MIGRATION_PLAN.md` §10 para el detalle por fase.
-
-- **FASE 6:** compartir/importar rutina por código, importación con IA desde imagen, exportación de
-  entrenamientos (PDF + imagen "historia"). Rutas `ImportCodeRoute` e `ImportImageRoute` son
-  `ComingSoonScreen` por ahora.
-- **FASE 7:** endurecimiento de release y verificación en dispositivo/emulador real.
 
 ## Referencias
 

@@ -35,12 +35,17 @@ class AndroidRestTimerAlarmScheduler @Inject constructor(
         // alarms are always allowed. Falling back to an inexact alarm (still `AllowWhileIdle`, so
         // it isn't deferred indefinitely by Doze) is an accepted risk (migration plan section 12):
         // it may fire a little late, never early, and never not at all.
+        val triggerAt = endsAt.toEpochMilli()
         val canScheduleExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
         if (canScheduleExact) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt.toEpochMilli(), pendingIntent)
-        } else {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt.toEpochMilli(), pendingIntent)
+            try {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                return
+            } catch (e: SecurityException) {
+                // Exact-alarm access revoked between the check and the call: fall back to inexact below.
+            }
         }
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
     }
 
     override fun cancel() {

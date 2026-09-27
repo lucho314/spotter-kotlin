@@ -1,9 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing is backed up or device-transferred: DataStore (encrypted session, "file"), Tink keyset
+  ("sharedpref") and Room ("database"). domain="root" alone does NOT cover the other domains (the
+  backup agent walks each one separately). Device-protected domains are unused (no directBootAware).
+-->
 <data-extraction-rules>
     <cloud-backup disableIfNoEncryptionCapability="true">
         <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
     </device-transfer>
 </data-extraction-rules>

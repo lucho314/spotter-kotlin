@@ -17,6 +17,9 @@ enum class ValidationReason {
     SHARE_CODE_INVALID,
     IMAGE_TOO_LARGE,
     IMAGE_UNREADABLE,
+
+    /** A shared routine's content couldn't be sanitized into something importable (e.g. more than [com.lucho314.spotter.domain.calc.SharedRoutineSanitizer.MAX_EXERCISES] exercises). */
+    SHARED_ROUTINE_INVALID,
     NO_EXERCISES,
     EXERCISE_ALREADY_IN_ROUTINE,
     DAY_ALREADY_EXISTS,
