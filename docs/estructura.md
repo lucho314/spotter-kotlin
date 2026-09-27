@@ -1,10 +1,10 @@
 # Estructura del proyecto
 
 Árbol verificado contra `app/src/main/java/com/lucho314/spotter/` y `app/src/test/java/com/lucho314/spotter/`
-tras FASES 1-6 (FASES 1-4 compiladas/testeadas en máquina; FASES 5-6 código escrito, 147 tests de
-dominio verificados en arnés JVM, resto sin compilar por falta de SDK). Un solo módulo Gradle `:app`.
-Los paquetes/archivos marcados **(planificado)** no existen todavía — ver `docs/arquitectura.md`
-sección "Planificado" para FASE 7.
+tras FASES 1-7 (FASES 1-4 compiladas/testeadas en máquina; FASES 5-7 código escrito, 473 tests de
+dominio, ViewModels y datos verificados en un arnés JVM, resto sin compilar por falta de SDK).
+Un solo módulo Gradle `:app`. Archivos nuevos de FASE 7: `proguard-rules.pro` (reescrito),
+`keystore.properties.example`, `data_extraction_rules.xml` (arreglado).
 
 ## Raíz
 
@@ -99,9 +99,14 @@ compartidos (`FakeAead`, `FakeAuthDataSource`, `FakeAuthRepository`, `FakeExerci
 Los tests de Room (`ActiveWorkoutDaoTest`, `CachedPayloadDaoTest`, `LocalDataRepositoryImplTest` (FASE 5),
 `PendingWorkoutDaoTest`) corren con Robolectric sobre una base en memoria.
 
-**571 `@Test`** en el código tras FASE 6 (conteo de anotaciones); 234 de dominio + helpers verificados
-sin SDK en arnés JVM, resto sin compilar. Tests nuevos de FASE 6: `TextSanitizerTest`, `SharedRoutineSanitizerTest`,
-`ExerciseSetGroupingTest`, `WorkoutExportDataBuilderTest`, `ShareRoutineUseCaseTest`, `ImportSharedRoutineUseCaseTest`,
+**571 `@Test`** en el código tras FASE 7 (conteo de anotaciones); 473 (dominio, ViewModels,
+capa de datos y navegación) verificados sin SDK en un arnés JVM, resto sin compilar. Tests de FASE 7 (correcciones):
+agregado `runCurrent()` en `DashboardViewModelTest`, `HistoryViewModelTest`, `ProgressViewModelTest`,
+`ProfileViewModelTest`, `SessionDetailViewModelTest`; `CompletableDeferred` gates en
+`FakeImageRepository`/`FakeRoutineRepository` para tests de doble toque (`ImportImageViewModelTest`,
+`ImportCodeViewModelTest`); `@OptIn(ExperimentalCoroutinesApi)` agregado a `ImportCodeViewModelTest`.
+Tests nuevos de FASE 6: `TextSanitizerTest`, `SharedRoutineSanitizerTest`, `ExerciseSetGroupingTest`,
+`WorkoutExportDataBuilderTest`, `ShareRoutineUseCaseTest`, `ImportSharedRoutineUseCaseTest`,
 `ImportRoutineFromImageUseCaseTest`, `BuildWorkoutExportUseCaseTest`, `AiImportErrorKindTest`, `ImageSizingTest`,
 `PageCursorTest`, `ExportFileNamesTest`, `DeepLinkParserTest`, `RouteArgsTest`, `RoutineDetailViewModelTest`,
 `SessionDetailViewModelTest` (con `onExport`), `ImportCodeViewModelTest`, `ImportImageViewModelTest`, `AiImportRepositoryImplTest`,

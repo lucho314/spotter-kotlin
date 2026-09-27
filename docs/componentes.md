@@ -1,10 +1,9 @@
 # Componentes principales
 
-Clases e interfaces reales del código tras FASES 1-6, agrupadas por capa. Cada identificador
+Clases e interfaces reales del código tras FASES 1-7, agrupadas por capa. Cada identificador
 listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado tras FASES 1-4 en
-máquina, FASES 5-6 código escrito no compilado; 147 tests de dominio de FASE 5 verificados en
-arnés JVM). La sección final "Planificado" lista los nombres que el plan define para FASE 7 y que
-**no existen todavía**.
+máquina, FASES 5-7 código escrito no compilado; 473 tests de dominio, ViewModels y
+datos verificados en un arnés JVM).
 
 ## `core/common` — tipos y utilidades compartidas
 
@@ -472,6 +471,3 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
 - **`Dtos.kt`** (actualizado): DTOs nuevos `SharedRoutineImportDto`, `SharedRoutineBodyDto`,
   `SharedRoutineDayDto`, `SharedRoutineExerciseDto`.
 
-## Planificado (no implementado — FASE 7)
-
-**FASE 7:** verificación en dispositivo real, endurecimiento de release, R8 proguard rules.

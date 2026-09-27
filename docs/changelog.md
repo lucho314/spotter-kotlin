@@ -6,6 +6,73 @@ ciclo de revisión está en `MIGRATION_PLAN.md` §10 y en `review_carryover.md`.
 
 ---
 
+## [FASE 7] — 2026-09-27 — IMPLEMENTADA PARTE A (SIN revisión independiente; Parte B pendiente)
+
+Endurecimiento y release: configuración de firma opcional, ProGuard razonado, correcciones de
+seguridad y robustez, accesibilidad, y pruebas de FASES 5-6 arregladas.
+
+- **Configuración de firma (FASE 7):**
+  - `keystore.properties` opcional con validación en `verifyReleaseConfig` (sin imprimir secretos).
+  - `keystore.properties.example` documentado (rutas Windows con barras inclinadas).
+  - `.gitignore` actualizado para `keystore.properties`, `/app/release/` y `*.apk`/`*.aab`.
+  - `signingConfigs { create("release") }` condicional; `verifyReleaseConfig` falla si está incompleto.
+  - `lint { abortOnError = true; checkReleaseBuilds = true; warningsAsErrors = false; baseline condicional }`.
+
+- **ProGuard (`app/proguard-rules.pro`) razonado:**
+  - Sin reglas redundantes; verificadas contra artefactos Maven (kotlinx-serialization, Ktor, OkHttp,
+    Tink, Coil, Hilt traen sus propias reglas).
+  - `-dontwarn java.lang.management.*` para `io.ktor.util.debug.IntellijIdeaDebugDetector` (JVM-only,
+    nunca ejecutable en Android).
+  - Strip de `Log` (v, d, i, w, e, wtf, println) en release.
+  - `SourceFile`/`LineNumberTable` preservados para stack traces legibles.
+
+- **Seguridad (FASE 7):**
+  - `data_extraction_rules.xml` arreglado: **antes solo excluía `root`** (bug de seguridad real:
+    sesión cifrada DataStore, keyset Tink y Room se transferían en device-to-device en Android 12+).
+    Ahora excluye `root`, `file`, `database`, `sharedpref`, `external` en cloud-backup y device-transfer.
+  - `tools:targetApi="31"` en `<application>` (dataExtractionRules es de API 31).
+  - `SecurityException` manejada en `RestTimerReceiver.notify()` (permiso revocado entre check y call).
+  - `RestTimerAlarmScheduler`: fallback a alarma inexacta si se revoca `SCHEDULE_EXACT_ALARM`.
+  - `SignOutUseCase` ya no loguea `e.message` (ahora `e::class.simpleName`).
+  - `ActivityNotFoundException` capturada en `ImportImageScreen` (galería), con snackbar.
+
+- **Robustez (FASE 7):**
+  - Fix crash API < 34: `LocalDate.ofInstant` reemplazado por `timeProvider.now().atZone(...).dayOfWeek`
+    en `RoutineDetailViewModel.todayWeekdayName()`.
+  - `@OptIn(UnstableApi::class)` en `ExerciseMedia.LoopingVideo` (Media3 1.11.1).
+  - `LineChart`: coerción de posición X sin `IllegalArgumentException` si etiquetas > canvas.
+  - Comillas escapadas en `routine_detail_active_workout_message` ("\" está en curso...).
+  - `ImportCodeViewModel`: guard sobre `status.value` (WhileSubscribed) en lugar de `uiState.value.status`.
+
+- **Accesibilidad (FASE 7):**
+  - Objetivos táctiles de 48 dp en elementos clicables: `DashboardScreen` (pending sync),
+    `ProfileScreen` (filas, GoalEditDialog con `selectableGroup` y radio buttons), `HistoryScreen`,
+    `RoutinesScreen` (archived entry, nuevo string `routines_archive_action`), `SpotterCard`,
+    `TemplateDetailScreen` (filas de ejercicios), `RoutineDetailScreen` (handle de drag & drop).
+  - `role`/`onClickLabel` en clicables; `onLongClickLabel` en `HistoryScreen` y `RoutinesScreen`.
+  - **P2 optional** (deferred): semantics en campos de peso/reps de `WorkoutScreen`.
+
+- **Tests (FASES 5-6, corregidos en FASE 7):**
+  - `runCurrent()` agregado en 4 tests (`DashboardViewModelTest`, `HistoryViewModelTest`,
+    `ProgressViewModelTest`, `ProfileViewModelTest`, `SessionDetailViewModelTest`).
+  - `CompletableDeferred` gates en `FakeImageRepository` y `FakeRoutineRepository` para tests de doble toque.
+  - `@OptIn(ExperimentalCoroutinesApi)` en `ImportCodeViewModelTest`.
+  - **Resultado:** 473 tests en arnés JVM p7h (todas las capas: domain, data, ViewModels, Navigation);
+    234 en arnés harness (domain + helpers puros).
+
+- **Verificación:**
+  - `verifyReleaseConfig` validado en 3 escenarios (sin keystore, incompleto, incompleto + .jks vacío).
+  - Arneses JVM verificados sin Android SDK; Compose/R8/lint/**assembleRelease** quedan en Parte B.
+  - **Parte B pendiente:** `./gradlew` completo, R8 success, lint baseline (si hace falta), APK verification.
+
+- **Desviaciones registradas** (detalle en `MIGRATION_PLAN.md` §7): ProGuard sin redundancias (verificado
+  en artefactos); `lint-baseline.xml` no creado (config condicional); correcciones fuera del alcance
+  estricto (`data_extraction_rules`, `verifyReleaseConfig` más estricto, crash de `ofInstant`,
+  15 tests de FASES 5-6, guard de `ImportCodeViewModel`); accesibilidad de reordenar con TalkBack deferred;
+  string propio `import_image_no_gallery_app` en lugar de reutilizar `share_no_app`.
+
+---
+
 ## [FASE 6] — 2026-09-27 — IMPLEMENTADA (SIN revisión independiente, SIN compilación de Android)
 
 Compartir e importar rutinas (por código e IA) y exportación de entrenamientos.

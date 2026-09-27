@@ -1306,7 +1306,28 @@ El botón primario usa un gradiente horizontal `#F4FFC6 → #C7EF00` con texto `
 5. **Accesibilidad:** `contentDescription` en iconos accionables y objetivos táctiles ≥48 dp.
 6. **Comprobaciones finales:** `./gradlew clean assembleDebug testDebugUnitTest lintDebug assembleRelease`. Verificar con `grep` que `app/build/outputs/apk/release/*.apk` no contiene la cadena "localhost" ni `http://`, y que `BuildConfig` release no expone nada fuera de URL y anon key.
 
-**Aceptación de la fase 7:** los cuatro comandos en verde; R8 activo (`mapping.txt` generado); ningún log de debug en release.
+**Aceptación de la fase 7:** Parte A: arneses JVM (p7h 473 tests, harness 234) en verde; `verifyReleaseConfig` en 3 escenarios sin imprimir secretos. Parte B (en máquina del usuario): `assembleDebug`, `testDebugUnitTest`, `lintDebug`, `assembleRelease` en verde; R8 activo (`mapping.txt` generado); ningún log de debug en release; nombre `SyncWorkoutsWorker` preservado en `mapping.txt`.
+
+### Desviaciones de FASE 7 (registradas durante la implementación Parte A)
+
+1. **ProGuard:** No se agregan reglas redundantes (kotlinx-serialization, Ktor, OkHttp, Tink, Coil, Hilt traen sus propias consumer-rules.pro verificadas contra Maven). Se agregan: `-dontwarn java.lang.management.*` (Ktor referencia JVM-only); strip de `Log` (v, d, i, w, e, wtf, println); `SourceFile`/`LineNumberTable` para stack traces legibles. **No** se agrega `-keep` de app code ni `-dontobfuscate` global.
+
+2. **`lint-baseline.xml` no creado:** la configuración es condicional (solo carga si existe). Para crear: `./gradlew :app:updateLintBaseline` en máquina del usuario tras limpiar issues de app code.
+
+3. **`data_extraction_rules.xml` arreglado como bug de seguridad real:** antes solo excluía `root`; sesión, keyset y entrenamientos **sí** se transferían en device-to-device. Ahora excluye cinco dominios (root, file, database, sharedpref, external).
+
+4. **`verifyReleaseConfig` más estricto:** valida que si `keystore.properties` existe, tenga todos los campos completos (no solo que el archivo exista). Nunca imprime secretos. Sin keystore → APK unsigned (válido para testing).
+
+5. **Correcciones fuera del alcance estricto de release pero necesarias:**
+   - Crash API < 34: `LocalDate.ofInstant` → `timeProvider.now().atZone(...).dayOfWeek` (venía de FASE 4).
+   - `@OptIn(UnstableApi)` Media3 en `ExerciseMedia.LoopingVideo`.
+   - `SecurityException` en `RestTimerReceiver.notify()` y fallback en `RestTimerAlarmScheduler`.
+   - Guard de `ImportCodeViewModel` usa `status.value` (WhileSubscribed).
+   - 15 tests de FASES 5-6 corregidos (`runCurrent()`, `CompletableDeferred` gates).
+
+6. **Accesibilidad de reordenar con TalkBack (acciones personalizadas):** deferred.
+
+7. **String propio `import_image_no_gallery_app`:** en lugar de reutilizar `share_no_app` (contexto diferente: "No hay app de galería" vs "No hay app para compartir").
 
 ---
 

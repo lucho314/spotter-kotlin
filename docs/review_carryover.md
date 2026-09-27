@@ -41,5 +41,34 @@
   - Cleanup: temporary camera files purged after 1h; exported files purge after 1h of last modification.
 - **Carry-over items from earlier phases:** See "Still open" sections in earlier approval entries.
 
+## FASE 7 implementation (post-implementation, Parte A without independent review)
+
+- [RESUELTO] ProGuard rules verified against Maven artifacts; only rules needed for Ktor (java.lang.management
+  -dontwarn) and log stripping added; no redundant or app-level keep rules.
+- [RESUELTO] data_extraction_rules.xml fixed: now excludes all five domains (root, file, database, sharedpref,
+  external) for cloud-backup and device-transfer. **Bug fix:** pre-FASE 7 only excluded `root` — session,
+  keyset, and Room workouts were transferred in device-to-device on Android 12+.
+- [RESUELTO] Crash in API < 34: `LocalDate.ofInstant` replaced by `timeProvider.now().atZone(...).dayOfWeek`
+  in `RoutineDetailViewModel.todayWeekdayName()`.
+- [RESUELTO] Media3 `@OptIn(UnstableApi)` added to `ExerciseMedia.LoopingVideo`.
+- [RESUELTO] `SecurityException` caught in `RestTimerReceiver.notify()` (permission revoked between check and call).
+- [RESUELTO] `RestTimerAlarmScheduler` fallback to inexact alarm if `SCHEDULE_EXACT_ALARM` revoked.
+- [RESUELTO] 15 tests of FASES 5-6 fixed: `runCurrent()`, `CompletableDeferred` gates, `@OptIn(ExperimentalCoroutinesApi)`.
+- [RESUELTO] Accessibility: 48 dp targets, role/onClickLabel/onLongClickLabel on interactive elements.
+- [RESUELTO] `verifyReleaseConfig` validated in 3 scenarios without printing secrets.
+
+## FASE 7 Parte B (pending on user's machine)
+
+- **`./gradlew :app:assembleDebug`** — verify compilation with Android SDK (Compose, Navigation, Room,
+  Canvas/PDF, Activity results, ClipboardManager types and APIs).
+- **`./gradlew :app:testDebugUnitTest`** — run full test suite on Android test runner (Robolectric for Room tests).
+- **`./gradlew :app:lintDebug`** — static analysis; create baseline if only library warnings remain.
+- **`./gradlew :app:assembleRelease`** — R8 obfuscation, lintVital; verify `mapping.txt` for `SyncWorkoutsWorker`
+  name preservation.
+- **APK verification:** no `http://` or `localhost` in app code; `BuildConfig` contains only approved constants.
+- **Smoke test on device/emulator:** login, routines, workout offline/online, exports, deep links, import from image.
+- **Real signing:** use EAS keystore (same as RN app), `./gradlew assembleRelease bundleRelease`,
+  `apksigner verify`, register SHA-1 in Android OAuth client if using Credential Manager.
+
 ## Post-FASE 4 fix (2026-09-26)
 - [RESUELTO] `core/navigation/SpotterNavHost.kt`: `RoutineDetailScreen`'s start-workout callback (driven by the async `RoutineDetailEvent.WorkoutStarted`, not a click) was wrapped in `dropUnlessResumed`; `ObserveAsEvents` can deliver at STARTED (before ON_RESUME), so the navigation was silently dropped and the workout was created but never opened. Fixed: renamed to `onOpenWorkout`, unguarded; new `NavController.navigateToWorkout()` (`launchSingleTop = true`) used by all three entry points (routines banner, `onOpenWorkout`, rest-finished notification via `SpotterRoot`), which also prevents stacking a second `WorkoutScreen` when the notification is tapped while the workout is already open. Not covered by an automated test (no Compose/Navigation UI test infrastructure) and **not compiled in the session that made the change** (no Android SDK available there) - run `./gradlew assembleDebug testDebugUnitTest` locally.

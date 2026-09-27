@@ -6,7 +6,7 @@ solo lectura: `E:\Spotter`), manteniendo el mismo backend Supabase sin cambios d
 
 ## Estado
 
-**FASES 1 a 6 de 7 implementadas** (aprobadas FASES 1-4 el 2026-09-26; **FASES 5-6 implementadas sin revisión independiente ni compilación del árbol Android**, solo 147 tests de dominio/helpers de FASE 5 verificados en arnés JVM; 571 tests totales escritos). Ver el plan completo en [`docs/MIGRATION_PLAN.md`](docs/MIGRATION_PLAN.md) y el detalle de arquitectura/estructura en `docs/`.
+**Todas las FASES (1-7) implementadas:** FASES 1-4 aprobadas el 2026-09-26; **FASES 5-7 implementadas sin revisión independiente, FASES 5-6 sin compilación de Android**. Arnés JVM: 473 tests verificados en un arnés JVM ampliado (dominio, helpers puros, los 19 ViewModels, capa de datos remota, mappers, repositorios y navegación, compilados contra supabase-kt/Ktor/kotlinx-serialization reales). **FASE 7 Parte A (configuración, seguridad, tests, accesibilidad):** implementada SIN revisión independiente; **Parte B (build Android, lint, R8, release):** pendiente en máquina del usuario. Ver el plan completo en [`docs/MIGRATION_PLAN.md`](docs/MIGRATION_PLAN.md) y el detalle de arquitectura/estructura en `docs/`.
 
 Implementado hoy:
 - Autenticación con Google (Credential Manager, con fallback a OAuth PKCE por navegador) y sesión
@@ -37,13 +37,15 @@ Implementado hoy:
   Cálculos puros: `TextSanitizer`, `SharedRoutineSanitizer`, `ExerciseSetGrouping`,
   `WorkoutExportDataBuilder`. Fix: `socketTimeoutMillis = 120 s` en `SupabaseAiImportRemoteDataSource`
   (OkHttp cortaba a los 10 s).
-- 571 tests unitarios totales (147 de dominio + helpers puros verificados sin Android SDK en
-  arnés JVM; el resto de ViewModel/Room/Feature escritos pero sin compilar por falta de SDK).
+- 571 tests unitarios totales. De esos, 473 se verificaron sin Android SDK en un arnés JVM
+  ampliado (dominio, helpers puros, ViewModels, capa de datos y navegación); el resto (Room/Robolectric,
+  UI) está escrito pero sin compilar por falta de SDK.
 
-**Pendiente (FASE 7, ver "Planificado" en `docs/*.md`):** endurecimiento de release y verificación
-en dispositivo/emulador real.
+**FASE 7:** endurecimiento y release implementados en Parte A (configuración, seguridad,
+  accesibilidad, 15 tests de FASES 5-6 corregidos). Verificación en dispositivo/emulador real
+  (Parte B: assembleDebug, tests, lint, assembleRelease, R8) pendiente en máquina del usuario.
 
-**FASES 5-6 sin verificación en dispositivo/emulador real ni compilación del árbol Android** — ver
+**FASES 5-7 sin compilación del árbol Android ni verificación en dispositivo/emulador real** — ver
 sección "Compilación" más abajo.
 
 ## Requisitos
@@ -80,16 +82,79 @@ Desde el directorio del proyecto (con el JDK de Android Studio en el PATH):
 
 ```bash
 ./gradlew assembleDebug            # APK debug
-./gradlew testDebugUnitTest         # tests unitarios (571 @Test totales, 147 verificados sin SDK)
+./gradlew testDebugUnitTest         # tests unitarios (571 @Test totales)
 ./gradlew assembleRelease           # APK release con R8 (falla si faltan las claves de Supabase)
 ./gradlew assembleDebug testDebugUnitTest   # build + tests en un solo paso
 ```
 
+## Firma y release (FASE 7)
+
+### Configuración de la firma
+
+1. Copiar `keystore.properties.example` a `keystore.properties` (gitignored) y completar con los datos del keystore:
+   ```properties
+   # Para usar la misma upload key que la app RN en Play Store (EAS):
+   storeFile=<ruta al .jks o .keystore de upload>
+   storePassword=<contraseña del keystore>
+   keyAlias=<alias de la clave>
+   keyPassword=<contraseña de la clave>
+   ```
+   Si el archivo no existe, `assembleRelease` genera un APK sin firmar. Si existe pero está incompleto,
+   la tarea `verifyReleaseConfig` falla explícitamente sin imprimir secretos.
+
+2. `./gradlew assembleRelease` genera `app/build/outputs/apk/release/app-release-unsigned.apk` (sin
+   keystore.properties) o el APK firmado (con la clave).
+
+### Checklist de verificación (Parte B, en máquina del usuario)
+
+**En orden de ejecución desde Git Bash:**
+
+```bash
+export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"
+export PATH="$JAVA_HOME/bin:$PATH"
+cd "/e/Spoter Kotlin"
+```
+
+1. **`./gradlew help`** → valida que los scripts de Gradle parseen correctamente.
+
+2. **`./gradlew :app:assembleDebug`** → errores de compilación acumulados de FASES 5-7. Pegar log.
+
+3. **`./gradlew :app:testDebugUnitTest`** → reporte en `app/build/reports/tests/testDebugUnitTest/index.html`.
+
+4. **`./gradlew :app:lintDebug`** → reporte en `app/build/reports/lint-results-debug.html`. Corregir
+   todo lo que apunte a `app/src/...`. Si solo quedan warnings de librerías, crear baseline:
+   ```bash
+   ./gradlew :app:updateLintBaseline
+   # luego editar app/lint-baseline.xml y borrar entradas con location en app/src/
+   ./gradlew :app:lintDebug
+   ```
+
+5. **`./gradlew :app:assembleRelease`** (sin `keystore.properties`) → verifica R8 y lintVital.
+   - Si R8 falla (*Missing class*): abrir `app/build/outputs/mapping/release/missing_rules.txt` y
+     copiar a `proguard-rules.pro` solo `-dontwarn` de APIs JVM-only o dependencias opcionales no usadas.
+
+6. **`./gradlew clean assembleDebug testDebugUnitTest lintDebug assembleRelease`** → ciclo completo.
+
+7. **Verificar el APK:**
+   ```bash
+   ls app/build/outputs/mapping/release/mapping.txt              # Confirma R8 activo
+   grep "SyncWorkoutsWorker -> " app/build/outputs/mapping/release/mapping.txt  # Debe coincidir exacto
+   grep -rn 'http://\|localhost' app/src/main/java               # Debe salir vacío
+   ```
+
+8. **Prueba de humo del release** (con APK unsigned + clave debug o clave real):
+   - Login con Google, listar rutinas, entrenar sin red, finalizar, volver a conectar, exportar PDF
+     e historia, deep link de importación, importación con IA.
+   - Logcat sin logs de la app.
+
+9. **Firma real:** crear o reutilizar keystore (EAS), `./gradlew assembleRelease bundleRelease`,
+   `apksigner verify --print-certs`, registrar SHA-1 en cliente OAuth Android si usa Credential Manager.
+
 **⚠️ Nota sobre FASES 5-6:** el código de las pantallas de dashboard, historial, progreso, perfil
 completo, compartir/importar rutinas y exportar entrenamientos está escrito pero **no ha sido
-compilado** porque el entorno de desarrollo donde se escribió no tiene Android SDK. Los 147 tests
-de dominio y helpers puros (cálculos, conversiones, validaciones, sanitización, formateo) de FASE 5
-fueron verificados en un arnés JVM independiente fuera del repo. Para compilar FASES 5-6 en
+compilado** porque el entorno de desarrollo donde se escribió no tiene Android SDK. Tras la FASE 7,
+473 tests (dominio, helpers puros, ViewModels, capa de datos y navegación) se verificaron en un
+arnés JVM independiente fuera del repo; las pantallas Compose, Room y los renderers Android no. Para compilar FASES 5-6 en
 producción, se requiere:
 1. Una máquina con `compileSdk 36`, `targetSdk 36`, `minSdk 26` y el JDK de Android Studio.
 2. Correr `./gradlew assembleDebug testDebugUnitTest` para verificar que los tipos, imports y
