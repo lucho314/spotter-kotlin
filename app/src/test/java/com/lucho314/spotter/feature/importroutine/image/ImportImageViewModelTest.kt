@@ -17,6 +17,7 @@ import com.lucho314.spotter.testutil.FakeImageRepository
 import com.lucho314.spotter.testutil.FakeNetworkMonitor
 import com.lucho314.spotter.testutil.FakeRoutineRepository
 import com.lucho314.spotter.testutil.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -174,7 +175,8 @@ class ImportImageViewModelTest {
 
     @Test
     fun `a double tap only encodes once`() = runTest {
-        val imageRepository = FakeImageRepository()
+        val gate = CompletableDeferred<Unit>()
+        val imageRepository = FakeImageRepository().apply { encodeGate = gate }
         val vm = viewModel(imageRepository = imageRepository)
         collectUiState(vm)
         vm.onGalleryResult("content://gallery/1")
@@ -184,6 +186,7 @@ class ImportImageViewModelTest {
         runCurrent()
 
         assertThat(imageRepository.encodeCalls).hasSize(1)
+        gate.complete(Unit)
     }
 
     @Test

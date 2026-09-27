@@ -17,6 +17,8 @@ import com.lucho314.spotter.testutil.FakeRoutineRepository
 import com.lucho314.spotter.testutil.FakeSharingRepository
 import com.lucho314.spotter.testutil.FakeTimeProvider
 import com.lucho314.spotter.testutil.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -24,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ImportCodeViewModelTest {
 
     @get:Rule
@@ -140,7 +143,8 @@ class ImportCodeViewModelTest {
     @Test
     fun `a double tap only calls createRoutine once`() = runTest {
         val sharingRepository = FakeSharingRepository().apply { sharedRoutineResult = AppResult.Success(validContent) }
-        val routineRepository = FakeRoutineRepository()
+        val gate = CompletableDeferred<Unit>()
+        val routineRepository = FakeRoutineRepository().apply { createRoutineGate = gate }
         val vm = viewModel("K7MN3QXP", sharingRepository, routineRepository)
         collectUiState(vm)
 
@@ -149,6 +153,7 @@ class ImportCodeViewModelTest {
         runCurrent()
 
         assertThat(routineRepository.createRoutineCalls).hasSize(1)
+        gate.complete(Unit)
     }
 
     @Test

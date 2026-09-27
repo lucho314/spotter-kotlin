@@ -27,7 +27,6 @@ import com.lucho314.spotter.domain.usecase.StartResult
 import com.lucho314.spotter.domain.usecase.StartWorkoutUseCase
 import com.lucho314.spotter.feature.common.toMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -262,7 +261,7 @@ class RoutineDetailViewModel @Inject constructor(
     }
 
     /** Today's Spanish weekday name, used to preselect it in `DayPickerSheet` (RN bug #7 fix). */
-    fun todayWeekdayName(): String = SpanishWeekdays.of(LocalDate.ofInstant(timeProvider.now(), timeProvider.zone()).dayOfWeek)
+    fun todayWeekdayName(): String = SpanishWeekdays.of(timeProvider.now().atZone(timeProvider.zone()).dayOfWeek)
 
     /**
      * [replaceExisting] is only ever `true` when the user explicitly picked "Descartar y empezar"

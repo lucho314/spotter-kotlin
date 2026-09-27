@@ -88,7 +88,7 @@ class ImportCodeViewModel @Inject constructor(
 
     fun onImportClick() {
         val currentCode = code ?: return
-        if (uiState.value.status !is ImportCodeStatus.Ready || importing.value) return
+        if (status.value !is ImportCodeStatus.Ready || importing.value) return
         val userId = authRepository.currentUser()?.id
         if (userId == null) {
             viewModelScope.launch { eventChannel.send(ImportCodeEvent.ActionFailed(R.string.error_unauthorized)) }

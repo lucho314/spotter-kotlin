@@ -107,6 +107,7 @@
     <string name="routines_explore_templates_subtitle">Programas armados por objetivo</string>
     <string name="routines_new_badge">NUEVO</string>
     <string name="routines_archived_entry">Archivadas</string>
+    <string name="routines_archive_action">Archivar rutina</string>
     <string name="routines_archived_title">Rutinas archivadas</string>
     <string name="routines_archived_empty">No archivaste ninguna rutina todavía.</string>
     <string name="routines_restore">Restaurar</string>
@@ -216,7 +217,7 @@
 
     <!-- Routine detail: start workout -->
     <string name="routine_detail_active_workout_title">Tenés un entrenamiento en curso</string>
-    <string name="routine_detail_active_workout_message">"%1$s" está en curso. ¿Querés continuarlo o empezar uno nuevo?</string>
+    <string name="routine_detail_active_workout_message">\"%1$s\" está en curso. ¿Querés continuarlo o empezar uno nuevo?</string>
     <string name="routine_detail_active_workout_continue">Continuar</string>
     <string name="routine_detail_active_workout_discard">Descartar y empezar</string>
     <string name="routine_detail_start_day_picker_title">¿Qué día vas a entrenar?</string>
@@ -410,6 +411,7 @@
     <string name="import_image_created">\"%1$s\" creada</string>
     <string name="import_image_created_generic">Rutina creada</string>
     <string name="import_image_no_camera_app">No encontramos una app de cámara.</string>
+    <string name="import_image_no_gallery_app">No encontramos una app de galería.</string>
     <string name="import_image_see_routines">Ver rutinas</string>
     <string name="import_image_error_offline">Sin conexión. Conectate a internet para importar con IA.</string>
     <string name="import_image_error_timeout">La IA tardó demasiado. Puede que la rutina se haya creado igual: revisá tu lista antes de intentar de nuevo.</string>

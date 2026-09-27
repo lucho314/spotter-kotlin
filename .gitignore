@@ -1,7 +1,7 @@
 .gradle/
 build/
 /local.properties
-/keystore.properties
+keystore.properties
 *.jks
 *.keystore
 .idea/
@@ -10,3 +10,4 @@ build/
 *.aab
 captures/
 .cxx/
+/app/release/

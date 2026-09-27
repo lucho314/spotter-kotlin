@@ -183,7 +183,13 @@ private fun FailedWorkoutsCard(
 
 @Composable
 private fun SessionCard(session: HistorySessionItem, onClick: () -> Unit, onLongClick: () -> Unit) {
-    SpotterCard(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
+    SpotterCard(
+        modifier = Modifier.fillMaxWidth().combinedClickable(
+            onClick = onClick,
+            onLongClickLabel = stringResource(R.string.history_delete_confirm_title),
+            onLongClick = onLongClick,
+        ),
+    ) {
         Text(
             text = session.routineName ?: stringResource(R.string.history_free_workout),
             style = MaterialTheme.typography.titleMedium,

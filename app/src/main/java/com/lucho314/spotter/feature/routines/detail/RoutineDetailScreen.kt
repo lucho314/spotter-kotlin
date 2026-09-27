@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -52,6 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -538,7 +541,7 @@ private fun RoutineDetailContent(
                                             onReorderDayGroup(orderedIds)
                                         }
                                     },
-                                ),
+                                ).size(48.dp).padding(12.dp),
                             )
                         },
                     )
@@ -567,7 +570,11 @@ private fun DayGroupHeader(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             color = if (onRename != null) SpotterColors.PrimaryContainer else SpotterColors.OnSurface,
-            modifier = if (onRename != null) Modifier.clickable(onClick = onRename) else Modifier,
+            modifier = if (onRename != null) {
+                Modifier.clickable(onClickLabel = stringResource(R.string.routine_detail_rename_day), role = Role.Button, onClick = onRename)
+            } else {
+                Modifier
+            },
         )
         Row {
             IconButton(onClick = onAddExercise) {
@@ -599,7 +606,7 @@ private fun ExerciseRow(
                     text = exercise.exercise?.name ?: stringResource(R.string.template_exercise_unknown),
                     style = MaterialTheme.typography.titleSmall,
                     color = SpotterColors.OnSurface,
-                    modifier = Modifier.clickable(onClick = onClick),
+                    modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
                 )
                 Text(
                     text = routineExerciseSummary(exercise.targetSets, exercise.targetReps, exercise.restSeconds),

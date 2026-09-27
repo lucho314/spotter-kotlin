@@ -7,6 +7,7 @@ import com.lucho314.spotter.domain.model.RoutineExercisePatch
 import com.lucho314.spotter.domain.model.RoutineInput
 import com.lucho314.spotter.domain.model.RoutineSummary
 import com.lucho314.spotter.domain.repository.RoutineRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -35,6 +36,9 @@ class FakeRoutineRepository : RoutineRepository {
 
     /** If set, thrown by [addExercises] instead of returning [addExercisesResult] - used to simulate cancellation. */
     var addExercisesThrows: Throwable? = null
+
+    /** When set, [createRoutine] suspends until it completes, to test in-flight re-entrancy. */
+    var createRoutineGate: CompletableDeferred<Unit>? = null
 
     val setArchivedCalls = mutableListOf<Pair<String, Boolean>>()
     val createRoutineCalls = mutableListOf<Pair<RoutineInput, String?>>()
@@ -80,6 +84,7 @@ class FakeRoutineRepository : RoutineRepository {
 
     override suspend fun createRoutine(userId: String, input: RoutineInput, sourceTemplateId: String?): AppResult<String> {
         createRoutineCalls += input to sourceTemplateId
+        createRoutineGate?.await()
         return createRoutineResult
     }
 

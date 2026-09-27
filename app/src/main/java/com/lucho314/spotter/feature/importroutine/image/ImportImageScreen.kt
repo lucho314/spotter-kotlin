@@ -139,7 +139,13 @@ fun ImportImageScreen(
                 )
                 SpotterButton(
                     text = stringResource(R.string.import_image_gallery),
-                    onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    onClick = {
+                        try {
+                            galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        } catch (e: ActivityNotFoundException) {
+                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.import_image_no_gallery_app)) }
+                        }
+                    },
                     variant = SpotterButtonVariant.Secondary,
                     enabled = !uiState.importing,
                     modifier = Modifier.fillMaxWidth(),

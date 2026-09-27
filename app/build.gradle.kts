@@ -23,6 +23,22 @@ val supabaseUrl = secret("SUPABASE_URL")
 val supabaseAnonKey = secret("SUPABASE_ANON_KEY")
 val googleWebClientId = secret("GOOGLE_WEB_CLIENT_ID")
 
+// Release signing (optional, FASE 7). keystore.properties is gitignored; see keystore.properties.example.
+val keystorePropertiesFile: File = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun keystoreValue(key: String): String? =
+    keystoreProperties.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() }
+
+// storeFile may be absolute or relative to the project root directory.
+val releaseStoreFile: File? = keystoreValue("storeFile")?.let { rootProject.file(it) }
+val hasReleaseSigning: Boolean = releaseStoreFile?.isFile == true &&
+    listOf("storePassword", "keyAlias", "keyPassword").all { keystoreValue(it) != null }
+
 android {
     namespace = "com.lucho314.spotter"
     compileSdk = 36
@@ -41,6 +57,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = keystoreValue("storePassword")
+                keyAlias = keystoreValue("keyAlias")
+                keyPassword = keystoreValue("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -52,6 +79,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -84,6 +114,18 @@ android {
             "META-INF/INDEX.LIST",
             "META-INF/io.netty.versions.properties",
         )
+    }
+
+    lint {
+        abortOnError = true
+        checkReleaseBuilds = true
+        warningsAsErrors = false
+        // Baseline ONLY for issues originating in third-party libraries, never app code (MIGRATION_PLAN
+        // FASE 7). Used only if the file exists, so a missing baseline never breaks or rewrites the build.
+        val lintBaseline = file("lint-baseline.xml")
+        if (lintBaseline.exists()) {
+            baseline = lintBaseline
+        }
     }
 }
 
@@ -166,7 +208,16 @@ dependencies {
 val verifyReleaseConfig = tasks.register("verifyReleaseConfig") {
     doLast {
         check(supabaseUrl.isNotBlank()) { "SUPABASE_URL is empty. Set it in local.properties or the environment." }
+        check(supabaseUrl.startsWith("https://")) { "SUPABASE_URL must start with https://." }
         check(supabaseAnonKey.isNotBlank()) { "SUPABASE_ANON_KEY is empty. Set it in local.properties or the environment." }
+        if (keystorePropertiesFile.exists()) {
+            check(hasReleaseSigning) {
+                "keystore.properties is incomplete (storeFile, storePassword, keyAlias, keyPassword) or storeFile " +
+                    "does not point to an existing file (relative paths resolve from the project root)."
+            }
+        } else {
+            logger.warn("keystore.properties not found: the release APK will be UNSIGNED (see keystore.properties.example).")
+        }
     }
 }
 

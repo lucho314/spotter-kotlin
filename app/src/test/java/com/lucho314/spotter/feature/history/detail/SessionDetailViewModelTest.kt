@@ -198,6 +198,7 @@ class SessionDetailViewModelTest {
             assertThat(event.uri).isEqualTo("content://f")
             assertThat(event.mimeType).isEqualTo("application/pdf")
         }
+        runCurrent()
         assertThat(vm.uiState.value.exporting).isNull()
     }
 
