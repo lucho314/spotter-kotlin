@@ -1,9 +1,10 @@
 # Componentes principales
 
-Clases e interfaces reales del código tras FASES 1-5, agrupadas por capa. Cada identificador
+Clases e interfaces reales del código tras FASES 1-6, agrupadas por capa. Cada identificador
 listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado tras FASES 1-4 en
-máquina, FASE 5 código escrito no compilado). La sección final "Planificado" lista los nombres
-que el plan define para FASES 6-7 y que **no existen todavía**.
+máquina, FASES 5-6 código escrito no compilado; 147 tests de dominio de FASE 5 verificados en
+arnés JVM). La sección final "Planificado" lista los nombres que el plan define para FASE 7 y que
+**no existen todavía**.
 
 ## `core/common` — tipos y utilidades compartidas
 
@@ -14,9 +15,9 @@ que el plan define para FASES 6-7 y que **no existen todavía**.
   Extensiones: `map`, `onSuccess`, `onFailure`, `getOrNull`, `notNullOrNotFound()`,
   `requirePositiveOrNotFound()` (colapsa un conteo de filas afectadas en `NotFound` cuando es 0 —
   importante bajo RLS, donde un update/delete sin permiso devuelve 0 filas con status 2xx).
-- **`ValidationReason`** (`enum`): 21 razones (`NAME_EMPTY`, `SETS_RANGE`, `DAYS_MAX_REACHED`,
-  `WORKOUT_REPS_RANGE`, `AGE_RANGE`, etc.), mapeadas a mensajes en
-  `feature/common/ValidationMessages.kt`.
+- **`ValidationReason`** (`enum`): 22 razones (`NAME_EMPTY`, `SETS_RANGE`, `DAYS_MAX_REACHED`,
+  `WORKOUT_REPS_RANGE`, `AGE_RANGE`, `SHARED_ROUTINE_INVALID` (FASE 6), etc.), mapeadas a mensajes
+  en `feature/common/ValidationMessages.kt`.
 - **`Logger`** (interfaz) / **`AndroidLogger`**: `d`/`w`/`e`, no-op fuera de `BuildConfig.DEBUG`.
 - **`TimeProvider`** (interfaz) / **`SystemTimeProvider`**: `now(): Instant`, `zone(): ZoneId`,
   inyectado para que ViewModels/use cases sean deterministas en tests (`FakeTimeProvider`).
@@ -109,11 +110,12 @@ Sin lógica de infraestructura. Principales: `RoutineSummary`/`RoutineDetail`/`R
 `WorkoutSessionDetail`/`LastExerciseSession`, `ActiveWorkout`/`ActiveExercise`/`ActiveSet`/
 `RestTimer`/`ActiveWorkoutStartOutcome`, `PendingWorkout`/`PendingSet`/`PendingStatus`,
 `Profile`/`ProfileStats`/`ProfileGoal`, `PersonalRecord`/`ExerciseProgressPoint`,
-`SharedRoutinePreview`/`SharedRoutineContent`/`SharedRoutineDay`/`SharedRoutineExercise`,
+`SharedRoutinePreview`/`SharedRoutineContent`/`SharedRoutineDay`/`SharedRoutineExercise`/`SanitizedSharedRoutine` (FASE 6),
 `AuthUser`/`AuthState`, `ShareCode` (value class con `parse`/`generate`), `WeightUnit` (`KG`/`LB`),
-`DashboardStats` (sin consumidores todavía — modelo listo para el dashboard de FASE 5).
+`DashboardStats`, `AiImportedRoutine`/`AiImportErrorCodes` (FASE 6), `ExportFormat`/`WorkoutExportData`/
+`ExportExercise`/`ExportSetRow`/`ExportTopSet`/`ExportedFile` (FASE 6).
 
-## `domain/repository` — 12 interfaces (todas con implementación en `data/repository`)
+## `domain/repository` — 14 interfaces (todas con implementación en `data/repository`)
 
 | Interfaz | Métodos clave |
 |---|---|
@@ -123,13 +125,15 @@ Sin lógica de infraestructura. Principales: `RoutineSummary`/`RoutineDetail`/`R
 | `ExerciseRepository` | `observeCatalog`, `observeMuscleGroups`, `refreshCatalog(force)`, `getExercise(id)` |
 | `TemplateRepository` | `getTemplates(goal?, daysPerWeek?)`, `getTemplate(id)` |
 | `SharingRepository` | `findActiveShare`, `createShare`, `getSharedRoutine(code)` |
-| `AiImportRepository` | `importFromImage(userId, base64Jpeg)` |
+| `AiImportRepository` | `importFromImage(userId, base64Jpeg): AppResult<AiImportedRoutine>` |
 | `ActiveWorkoutRepository` | `observeActive`/`getActive`, `start`, `replace`, `updateSetInputs`, `setCompleted`, `addSet`, `setCurrentExercise`, `setRestTimer`, `discard`, `moveToOutbox` |
 | `PendingWorkoutRepository` | `observeCount`, `observeFailed`, `getPending`, `upload`, `delete`, `markFailed`, `resetToPending`, `recordAttempt` |
 | `WorkoutHistoryRepository` | `getSessions(page)`, `getSession`, `updateSet`, `addSet`, `deleteSet`, `deleteSession`, `getLastSession`, `getCompletedSince`, `getLastCompletedAt`, `countCompleted` |
 | `ProgressRepository` | `getPersonalRecords`, `getLatestPersonalRecord`, `countPersonalRecords`, `getExerciseSets(limit=500)` |
 | `ProfileRepository` | `getProfile`, `updatePhysical`, `countActiveRoutines` |
 | `LocalDataRepository` | `clearAll()` — borra todas las tablas Room (active/pending/cached) de forma atómica (FASE 5) |
+| `ImageRepository` | `createCameraCaptureUri(): AppResult<String>`, `clearCameraCaptures()`, `encodeForAiImport(uri): AppResult<String>` (FASE 6) |
+| `WorkoutExportRepository` | `export(data, format): AppResult<ExportedFile>` (FASE 6) |
 
 Todos los métodos suspend que cruzan red devuelven `AppResult<T>`; los `Flow` (`observe*`) nunca
 lanzan, reflejan el estado del caché local.
@@ -139,7 +143,8 @@ lanzan, reflejan el estado del caché local.
 - **`AdoptTemplateUseCase`** (FASE 3): `invoke(userId, template): AppResult<List<String>>`
   crea una `Routine` por día de la plantilla (vía `RoutineRepository`), con **compensación**: si
   falla cualquier paso (incluida la cancelación de la corrutina, manejada con `NonCancellable`),
-  borra las rutinas ya creadas antes de propagar el error/cancelación.
+  borra las rutinas ya creadas antes de propagar el error/cancelación. KDoc nota riesgo inherente de
+  cancelación durante `createRoutine` en vuelo (mitigado por `BackHandler`).
 - **`StartWorkoutUseCase`** (FASE 4): arma la instantánea del entrenamiento a partir de la rutina y
   un `DaySelection` (`Day(n)`/`Unassigned`/`All`); devuelve `StartResult.Started(sessionId)` o
   `StartResult.ActiveWorkoutExists(existing)`. Con `replaceExisting = true` reemplaza la sesión
@@ -174,6 +179,18 @@ lanzan, reflejan el estado del caché local.
   Room (`LocalDataRepository.clearAll()`), llama `signOut()`, borra preferencias por usuario
   (conserva unidad kg/lb). Si falla el borrado, no cierra sesión y reprograma sync. Además,
   `risk(userId): SignOutRisk` calcula entrenamientos sin sincronizar e indica si hay uno activo.
+- **`ShareRoutineUseCase`** (FASE 6): `invoke(userId, routine): AppResult<ShareCode>` — reutiliza
+  un share activo no vencido del usuario; si no hay, genera uno con `ShareCode.generate(SecureRandom)`,
+  hasta 3 intentos ante `Conflict`. Nunca comparte una rutina ajena (defensa B2). Valida propiedad.
+- **`ImportSharedRoutineUseCase`** (FASE 6): `preview(code): AppResult<SharedRoutinePreview>` y
+  `importRoutine(code, userId): AppResult<String>`. Re-valida el código (descarta vencidos),
+  saneamiento completo (deduplicación, límite 100 ejercicios), compensación ante fallo/cancelación.
+  KDoc nota riesgo inherente de cancelación durante `createRoutine` en vuelo.
+- **`ImportRoutineFromImageUseCase`** (FASE 6): `invoke(userId, base64Jpeg): AppResult<AiImportedRoutine>` —
+  validación de tamaño sin llamadas, re-codificación, validación de UUID y propiedad del usuario,
+  refresco de rutinas en fallos ambiguos (puede haber creado igual).
+- **`BuildWorkoutExportUseCase`** (FASE 6): `invoke(detail, unit): WorkoutExportData` — constructor
+  puro que delega en `WorkoutExportDataBuilder` con zona horaria del `TimeProvider`.
 
 ## `domain/calc` — cálculos puros (100% testeados)
 
@@ -184,7 +201,9 @@ lanzan, reflejan el estado del caché local.
 (`formatVolume` con unidad), `SetInputValidator` (FASE 5: valida peso + reps para series con
 conversión de unidades), `Validators`, `ActiveSetWeight` (FASE 4: regla única "peso vacío
 inválido salvo en `BODYWEIGHT`", compartida por `ToggleSetCompletionUseCase` y
-`FinishWorkoutUseCase`).
+`FinishWorkoutUseCase`), `TextSanitizer` (FASE 6: normalización de caracteres, bidi, límites),
+`SharedRoutineSanitizer` (FASE 6: sanitización con deduplicación), `ExerciseSetGrouping`
+(FASE 6: agrupación única), `WorkoutExportDataBuilder` (FASE 6: construcción de datos exportables).
 
 ## `data/remote` y `data/mapper`
 
@@ -272,7 +291,9 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   ejercicio, agregar/renombrar/borrar día. FASE 4: "Iniciar Entrenamiento" con selector de día,
   diálogo "Continuar / Descartar y empezar / Cancelar" ante `WorkoutAlreadyActive`, pedido de
   `POST_NOTIFICATIONS` en API 33+, y `onOpenWorkout` (sin guard `dropUnlessResumed`: lo dispara el
-  evento `WorkoutStarted`).
+  evento `WorkoutStarted`). FASE 6: icono Share → `onShareClick()`, invoca `ShareRoutineUseCase`,
+  copia código, abre ACTION_SEND, muestra snackbar "Código copiado: X". Relay de mensaje
+  "Rutina importada" vía `savedStateHandle`.
 - **`addexercise/AddExerciseViewModel`** (`AddExerciseItem`, `ConfiguringExercise`,
   `AddExerciseUiState`, `AddExerciseEvent`) / **`AddExerciseScreen`**: catálogo con búsqueda y
   filtro por grupo muscular, `NumberStepper` de sets/reps/descanso.
@@ -318,7 +339,8 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   **`ValidationReason.toMessageRes()`**: mapeos a strings localizados.
 - **`routineExerciseSummary(sets, reps, restSeconds)`**: "N series × N reps · Ns descanso" con
   plurales reales.
-- **`ComingSoonScreen`**: placeholder para ImportCodeRoute/ImportImageRoute (FASE 6).
+- **`ShareIntents`** (FASE 6): `launchShareText(text, title): Boolean`, `launchShareFile(uri, mime, title): Boolean`,
+  `copyPlainTextToClipboard(label, text)` — helpers Android para ACTION_SEND y portapapeles.
 - **`SectionState<T>`** (FASE 5, sealed interface): `Loading`, `Loaded<T>`, `Error(@StringRes)` —
   estado genérico de sección que puede estar cargando, cargada o con error.
 - **`DateFormats`** (FASE 5, puro): `longDay(instant, zone)` → "lunes 3 de marzo",
@@ -356,7 +378,7 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
 - **`DashboardFormatters`** (FASE 5, puro): `Greeting` enum, `greetingFor(now, zone)`,
   `LastSessionLabel` (sealed interface), `lastSessionLabel(last, now, zone)`.
 
-## `feature/history` (FASE 5)
+## `feature/history` (FASE 5-6)
 
 - **`list/HistoryViewModel`** (`HistoryUiState`, `HistoryEvent`): lista de sesiones paginadas
   (offset/limit, 30 por página), banner de pendientes y de fallidos (con "Reintentar" y "Descartar"),
@@ -366,10 +388,15 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   banner de pendientes/fallidos, "Cargar más" con loading si hay más páginas.
 - **`detail/SessionDetailViewModel`** (`ExerciseBlock`, `EditingSet`, `SessionDetailUiState`,
   `SessionDetailEvent`): detalle de sesión con bloques por ejercicio, edición por fila con
-  validación, agregar serie, borrado con confirmación. Acciones: `onEditSet(id)`, `onEditDismiss()`,
-  `onEditConfirm(weight, reps)`, `onDeleteSet(id)`, `onAddSet(exerciseId)`, `retry()`.
-- **`detail/SessionDetailScreen`** (FASE 5): `TopAppBar`, hero (duración/volumen/series), bloques
-  con filas de series (editable, borrable), diálogo de edición.
+  validación, agregar serie, borrado con confirmación. FASE 6: `onExport(format)` invoca
+  `BuildWorkoutExportUseCase` + `WorkoutExportRepository`, estado `exporting`. Acciones:
+  `onEditSet(id)`, `onEditDismiss()`, `onEditConfirm(weight, reps)`, `onDeleteSet(id)`,
+  `onAddSet(exerciseId)`, `onExport(format)`, `retry()`. Eventos: `ShareFile(uri, mimeType)`.
+- **`detail/SessionDetailScreen`** (FASE 5-6): `TopAppBar` con icono Share (FASE 6), hero
+  (duración/volumen/series), bloques con filas de series (editable, borrable), diálogo de edición.
+  FASE 6: `showShareSheet` + `ShareWorkoutSheet`, evento `ShareFile` → `launchShareFile`.
+- **`share/ShareWorkoutSheet`** (FASE 6, stateless): `ModalBottomSheet` con opciones "PDF Detallado"
+  e "Historia", cada una con `CircularProgressIndicator` si `exporting == format`.
 
 ## `feature/progress` (FASE 5)
 
@@ -380,6 +407,32 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   trofeo), chips de ejercicios (click para seleccionar/deseleccionar), `LineChart` de 1RM por
   sesión con etiquetas "d/M".
 
+## `feature/importroutine` (FASE 6)
+
+- **`code/ImportCodeViewModel`** (`ImportCodeStatus`, `ImportCodeUiState`, `ImportCodeEvent`):
+  re-valida código (sin red si inválido), carga preview con `ImportSharedRoutineUseCase`, importa
+  con compensación. Estados: `Loading`, `Unavailable(titleRes)`, `LoadError(messageRes)`,
+  `Ready(preview)`. Eventos: `Imported(routineId)`, `ActionFailed(messageRes)`. Acciones:
+  `retry()`, `onImportClick()`.
+- **`code/ImportCodeScreen`**: `TopAppBar`, `BackHandler`, estados `Loading`/`Unavailable`/
+  `LoadError`/`Ready` con preview (nombre, ejercicios, días), botones "Importar rutina" y
+  "Cancelar", evento `Imported` → callback `onImported(routineId)`.
+- **`image/ImportImageViewModel`** (`ImportImageUiState`, `ImportImageEvent`): cámara (FileProvider)
+  y galería (PickVisualMedia), preview, compresión vía `ImageRepository`, IA vía
+  `ImportRoutineFromImageUseCase`. Estados: `imageUri`, `importing`. Eventos: `LaunchCamera(uri)`,
+  `Imported(routineId, routineName)`, `ShowError(kind)`. Acciones: `onCameraClick()`,
+  `onCameraResult(success)`, `onGalleryResult(uri)`, `onClearImage()`, `onImportClick()`, override
+  `onCleared()` limpia cámara en `NonCancellable`.
+- **`image/ImportImageScreen`**: `TopAppBar`, `BackHandler`, launchers para `TakePicture` y
+  `PickVisualMedia`, descripción, dos botones sin imagen o uno + preview + "Cambiar" con imagen,
+  ` CircularProgressIndicator` mientras importa. Evento `LaunchCamera` → `cameraLauncher.launch`
+  (con try/catch `ActivityNotFoundException`). Evento `ShowError` → snackbar (con "Ver rutinas" si
+  `kind.suggestsCheckingRoutines`). Evento `Imported` → callback `onRoutineCreated(id, name)`.
+- **`image/AiImportErrorKind`** (puro, sin R): `OFFLINE`, `IMAGE_TOO_LARGE`, `IMAGE_UNREADABLE`,
+  `TIMEOUT_MAYBE_CREATED`, `CONNECTION_LOST_MAYBE_CREATED`, `NOT_RECOGNIZED`, `SESSION_EXPIRED`,
+  `GENERIC`. Extensión `AppError.toAiImportErrorKind()`, propiedad `suggestsCheckingRoutines`,
+  método local `messageRes()` → `@StringRes`.
+
 ## `core/designsystem/component`
 
 `SpotterButton` (variantes `Primary`/`Secondary`/`Ghost`, tamaños `Small`/`Medium`/`Large`),
@@ -387,11 +440,38 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
 `LoadingState`, `ErrorState`, `EmptyState`, `ExerciseMedia` (+ función `isVideoUrl`), `StatCard`,
 `LineChart`, `LineChartGeometry` (FASE 5).
 
-## Planificado (no implementado — nombres del plan, fases 6-7)
+## Datos (FASE 6)
 
-**FASE 6:** `ShareRoutineUseCase`, `ImportSharedRoutineUseCase`, `ImportRoutineFromImageUseCase`,
-`BuildWorkoutExportUseCase`; `feature/importroutine/code/ImportCodeScreen`/`ViewModel`,
-`feature/importroutine/image/ImportImageScreen`/`ViewModel` (hoy son `ComingSoonScreen`);
-`feature/history/share/ShareWorkoutSheet` (para PDF/JPEG).
+- **`data/export/ExportPalette`**: constantes ARGB que replican `SpotterColors` (sin Compose).
+- **`data/export/PageCursor`** (puro): rastreador de página/posición Y para paginación de PDF.
+- **`data/export/ExportFileNames`** (puro): nombres con timestamp UTC, limpieza de archivos vencidos.
+- **`data/export/ExportFileWriter`**: escribe en `cacheDir/exports/`, purga, devuelve Uri de
+  `FileProvider`.
+- **`data/export/WorkoutPdfRenderer`**: `PdfDocument` A4, header con "SPOTTER" y fecha, hero,
+  tabla de series paginada con encabezado repetido "(cont.)", pie con página, fuentes desde
+  `ResourcesCompat.getFont`, sin dependency Compose.
+- **`data/export/WorkoutStoryRenderer`**: `Bitmap` 1080×1920 ARGB, `Canvas` con `LinearGradient`,
+  "SPOTTER", fecha, nombre, 3 tiles (duración/volumen/series), 4 ejercicios + "+N más", pie,
+  `compress(JPEG, 92)`.
+- **`data/export/WorkoutExportRepositoryImpl`**: orquesta con `ExportFileWriter`, selecciona
+  renderer, maneja errores.
+- **`data/image/ImageSizing`** (puro): `inSampleSize`, `scaledSize`, `base64Length`, `exifTransform`.
+- **`data/image/ImageRepositoryImpl`**: `createCameraCaptureUri` (FileProvider temporal, purga 1h),
+  `clearCameraCaptures` (best effort), `encodeForAiImport` (decodificación, EXIF, escalado,
+  compresión iterativa). Try/catch propio sin `safeCall`.
+- **`data/repository/AiImportErrorMapper`** (puro object): mapea excepciones a `AiImportErrorCodes`,
+  nunca propaga `message`.
+- **`AiImportRepositoryImpl`** (actualizado): usa `AiImportErrorMapper`, nunca loguea `error` del
+  servidor, loguea solo clase y status.
+- **`SharingRepositoryImpl`** (actualizado): consulta mínima con `SharedRoutineImportDto`,
+  valida `shareCode` y `isActive` en cliente.
+- **`SharingRemoteDataSource`/`SupabaseSharingRemoteDataSource`** (actualizados): nueva consulta de
+  share liviana.
+- **`SupabaseAiImportRemoteDataSource`** (actualizado): `socketTimeoutMillis = REQUEST_TIMEOUT_MS`
+  + KDoc explícito del bug de OkHttp 10 s.
+- **`Dtos.kt`** (actualizado): DTOs nuevos `SharedRoutineImportDto`, `SharedRoutineBodyDto`,
+  `SharedRoutineDayDto`, `SharedRoutineExerciseDto`.
+
+## Planificado (no implementado — FASE 7)
 
 **FASE 7:** verificación en dispositivo real, endurecimiento de release, R8 proguard rules.

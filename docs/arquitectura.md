@@ -1,9 +1,9 @@
 # Arquitectura de Spotter
 
-Estado: refleja el código tras **FASES 1-5** (FASES 1-4 aprobadas el 2026-09-26; FASE 5 implementada
-sin revisión independiente ni compilación de Android, solo 147 tests de dominio verificados en
-arnés JVM). La sección final "Planificado" documenta lo que el plan define para FASES 6-7 y que
-**no existe todavía** en el código.
+Estado: refleja el código tras **FASES 1-6** (FASES 1-4 aprobadas el 2026-09-26; FASES 5-6
+implementadas sin revisión independiente ni compilación de Android, solo 147 tests de dominio
+verificados en arnés JVM; 571 tests totales escritos). La sección final "Planificado" documenta lo
+que el plan define para FASE 7 y que **no existe todavía** en el código.
 
 ## Visión general
 
@@ -175,7 +175,7 @@ borrado de Room falla, no cierra sesión y reprograma la sincronización para re
 - Rutas `@Serializable` (`core/navigation/Routes.kt`) en un único `NavHost` (`SpotterNavHost`)
   dentro de la raíz autenticada. La barra inferior (`TopLevelDestination`: Dashboard, Rutinas,
   Historial, Progreso, Perfil) se muestra en esos 5 destinos top-level (Dashboard, Historial y
-  Progreso implementados en FASE 5; ImportCodeRoute e ImportImageRoute siguen como `ComingSoonScreen`).
+  Progreso implementados en FASE 5; ImportCodeRoute e ImportImageRoute implementadas en FASE 6).
 - Los ViewModels con argumentos de ruta leen el `SavedStateHandle` directamente por clave
   (`RouteArgs`), no con `toRoute<T>()`: se verificó que `toRoute()` no decodifica argumentos cuando
   el `SavedStateHandle` no viene de un `NavBackStackEntry` real, lo que rompía los tests con fakes
@@ -318,14 +318,11 @@ cada una a fines de FASE 4:
 | A11 | Exportación nativa (PDF + JPEG de "historia") | No implementado (FASE 6) |
 | A12 | Peso siempre en kg, conversión solo de presentación | `FinishWorkoutUseCase` convierte a kg (FASE 4); UI de unidad kg/lb en `ProfileScreen` (FASE 5) |
 
-## Planificado (no implementado — fases 6 a 7)
+## Planificado (no implementado — FASE 7)
 
 Documentado acá solo para dejar explícito qué falta; **nada de lo siguiente existe en el código
-hoy**. Ver `MIGRATION_PLAN.md` §10 para el detalle por fase.
+hoy**. Ver `MIGRATION_PLAN.md` §10 para el detalle.
 
-- **FASE 6:** compartir/importar rutina por código, importación con IA desde imagen, exportación de
-  entrenamientos (PDF + imagen "historia"). Rutas `ImportCodeRoute` e `ImportImageRoute` son
-  `ComingSoonScreen` por ahora.
 - **FASE 7:** endurecimiento de release y verificación en dispositivo/emulador real.
 
 ## Referencias

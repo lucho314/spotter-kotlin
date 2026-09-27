@@ -6,6 +6,73 @@ ciclo de revisión está en `MIGRATION_PLAN.md` §10 y en `review_carryover.md`.
 
 ---
 
+## [FASE 6] — 2026-09-27 — IMPLEMENTADA (SIN revisión independiente, SIN compilación de Android)
+
+Compartir e importar rutinas (por código e IA) y exportación de entrenamientos.
+
+- **Compartir rutina** (`RoutineDetailScreen` icono Share):
+  - Reutiliza un share activo no vencido del mismo usuario; si no hay, crea con `ShareCode.generate(SecureRandom)`,
+    hasta 3 intentos ante `Conflict`.
+  - Nunca comparte una rutina ajena (defensa contra B2).
+  - Abre `ACTION_SEND` con copia al portapapeles y deep link `spotter://import/{code}`.
+- **Importar por código** (`ImportCodeRoute`):
+  - Vista previa: "RUTINA COMPARTIDA", nombre, conteo de ejercicios y días con plurales reales.
+  - Re-valida el código (sin red si es inválido); descarta los vencidos.
+  - Importación saneada: nombre `"X (importada)"` (≤50 caracteres), recorte de descripción/rangos,
+    deduplicación de ejercicios, tope 100 ejercicios; falla o cancelación → compensación
+    (`deleteRoutine` con `NonCancellable`).
+  - Relay de snackbar "Rutina importada" a `RoutineDetailScreen` vía `NavBackStackEntry.savedStateHandle`.
+- **Importar con IA** (`ImportImageRoute`):
+  - Botones "Cámara" (`TakePicture` sobre `FileProvider`, sin permiso `CAMERA`) y "Galería"
+    (`PickVisualMedia(ImageOnly)`).
+  - Compresión con `inSampleSize`, rotación EXIF, escalado ≤1600 px, JPEG 80/70/60 sin metadata,
+    base64 ≤4 MB.
+  - Chequeo de red previo (error `OFFLINE` sin llamar); respuesta validada (UUID + propiedad del usuario).
+  - Éxito: navegación a `RoutineDetailRoute` con relay de snackbar "X creada" o genérico.
+  - Errores genéricos sin texto del servidor; timeout/desconexión ofrecen "Ver rutinas" (puede haber creado igual).
+  - Fix: `socketTimeoutMillis = 120 s` en `SupabaseAiImportRemoteDataSource` (OkHttp cortaba a los 10 s).
+- **Exportar entrenamiento** (`SessionDetailScreen` icono Share → `ShareWorkoutSheet`):
+  - Opciones: PDF A4 paginado (595×842 pt) con encabezado, hero, tabla de series con RPE; e imagen "historia"
+    1080×1920 JPEG con tema oscuro, gradiente, 4 ejercicios + "+N más".
+  - Ambas en la unidad kg/lb preferida del usuario, con series, volumen, duración, fecha es-AR.
+  - Comparten vía `ACTION_SEND` + `FileProvider`, se guardan en `cacheDir/exports/`, se purgan tras 1 h.
+- **Use cases nuevos:** `ShareRoutineUseCase`, `ImportSharedRoutineUseCase`, `ImportRoutineFromImageUseCase`,
+  `BuildWorkoutExportUseCase` (más el puro `WorkoutExportDataBuilder` en `domain/calc/`).
+- **Dominio puro:** `TextSanitizer` (normalización de caracteres, bidi, límite de largo sin cortar surrogate),
+  `SharedRoutineSanitizer` (sanitización de rutinas compartidas con deduplicación), `ExerciseSetGrouping`
+  (agrupación única de series por ejercicio, compartida con `SessionDetailViewModel`),
+  `WorkoutExportDataBuilder` (construcción de datos estructurados para renderers).
+  Modelos: `AiImportModels` (`AiImportedRoutine`, `AiImportErrorCodes`), `WorkoutExportModels`
+  (`ExportFormat`, `WorkoutExportData`, `ExportExercise`, etc.), `SanitizedSharedRoutine`.
+- **Datos:** `AiImportErrorMapper` (nunca propaga texto de servidor). `data/image/ImageRepositoryImpl`
+  + `ImageSizing` (puro). `data/export/`: `ExportPalette`, `ExportFileWriter`, `WorkoutPdfRenderer`
+  (StaticLayout, tabla paginada), `WorkoutStoryRenderer` (Canvas + LinearGradient), `WorkoutExportRepositoryImpl`,
+  `PageCursor` (puro), `ExportFileNames` (puro).
+- **Features:** `feature/common/ShareIntents` (ACTION_SEND + portapapeles), `feature/importroutine/code/`
+  (`ImportCodeScreen` + `ViewModel`), `feature/importroutine/image/` (`ImportImageScreen` + `ViewModel`,
+  `AiImportErrorKind` puro), `feature/history/share/ShareWorkoutSheet` (stateless).
+- **Navegación:** rutas `ImportCodeRoute(code)`/`ImportImageRoute` reales, relay `KEY_ROUTINE_DETAIL_MESSAGE`
+  en `SpotterNavHost`, deep links en `DeepLinks.importRoutine(code)`, `popUpTo<ImportCodeRoute>`/
+  `popUpTo<ImportImageRoute>` para reemplazar previsualizaciones.
+- **Validación:** `ValidationReason.SHARED_ROUTINE_INVALID` (más de 100 ejercicios tras saneamiento).
+- **Mitigaciones del lado del cliente para B1/B2:**
+  - `user_id` solo del usuario actual en la solicitud de IA.
+  - Validación de respuesta: UUID y rutina del usuario (re-lectura).
+  - Consulta de share mínima sin ids de terceros.
+  - Solo se comparten rutinas propias (verificación en use case).
+- **Sin cambios:** dependencias, `AndroidManifest.xml`, `file_paths.xml`, esquema Room, backend.
+- **Compilación:** 234 tests de dominio y helpers puros pasan en arnés JVM fuera del repo. Los tests
+  Gradle-only (ViewModel/Feature) están escritos pero sin compilar (sin Android SDK). Sin verificación
+  en dispositivo real del deep link ni del diseño visual PDF/historia.
+- **Desviaciones registradas** (detalle en `MIGRATION_PLAN.md` §7): ubicación de `WorkoutExportDataBuilder`
+  en `domain/calc/`; forma estructurada de `WorkoutExportData`; orden de ejercicios por `completedAt`
+  mínimo + `exerciseId`; mapper propio `AiImportErrorMapper`; validación y refresco de rutina en
+  `ImportRoutineFromImageUseCase`; `socketTimeoutMillis` en `SupabaseAiImportRemoteDataSource`;
+  consulta liviana con DTO nuevo; saneamiento completo con deduplicación y nombre `"… (importada)"`;
+  triple reintento en `ShareRoutineUseCase`; puertos `ImageRepository`/`WorkoutExportRepository`.
+
+---
+
 ## [FASE 5] — 2026-09-26 — IMPLEMENTADA (sin revisión independiente, sin compilación de Android)
 
 Historial, progreso, dashboard y perfil completo.

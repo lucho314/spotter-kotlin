@@ -6,7 +6,7 @@ solo lectura: `E:\Spotter`), manteniendo el mismo backend Supabase sin cambios d
 
 ## Estado
 
-**FASES 1 a 5 de 7 implementadas** (aprobadas FASES 1-4 el 2026-09-26; **FASE 5 implementada sin revisión independiente ni compilación del árbol Android**, solo tests de dominio/helpers). Ver el plan completo en [`docs/MIGRATION_PLAN.md`](docs/MIGRATION_PLAN.md) y el detalle de arquitectura/estructura en `docs/`.
+**FASES 1 a 6 de 7 implementadas** (aprobadas FASES 1-4 el 2026-09-26; **FASES 5-6 implementadas sin revisión independiente ni compilación del árbol Android**, solo 147 tests de dominio/helpers de FASE 5 verificados en arnés JVM; 571 tests totales escritos). Ver el plan completo en [`docs/MIGRATION_PLAN.md`](docs/MIGRATION_PLAN.md) y el detalle de arquitectura/estructura en `docs/`.
 
 Implementado hoy:
 - Autenticación con Google (Credential Manager, con fallback a OAuth PKCE por navegador) y sesión
@@ -27,14 +27,23 @@ Implementado hoy:
   y `SignOutUseCase` con limpieza de Room y advertencia de entrenamientos sin sincronizar. Banner
   "Entrenamiento en curso" compartido en Dashboard y Rutinas. Cinco use cases nuevos: `GetDashboardStatsUseCase`,
   `GetExerciseProgressUseCase`, `GetProfileOverviewUseCase`, `UpdateProfileUseCase`, `SignOutUseCase`.
-- 458 tests unitarios totales (147 de dominio + helpers puros verificados sin Android SDK; el resto
-  de ViewModel/Room escritos pero sin compilar por falta de SDK).
+- **FASE 6 implementada (sin revisión ni compilación):** compartir rutina (`RoutineDetailScreen`,
+  Action Send + portapapeles), importar por código (`ImportCodeRoute` con preview y validación),
+  importar con IA desde imagen (`ImportImageRoute` con cámara/galería, re-codificación EXIF-less,
+  validación UUID y propiedad), exportar entrenamiento en PDF A4 paginado e imagen "historia"
+  1080×1920 (`SessionDetailScreen` con `ShareWorkoutSheet`). Nuevos use cases: `ShareRoutineUseCase`,
+  `ImportSharedRoutineUseCase`, `ImportRoutineFromImageUseCase`, `BuildWorkoutExportUseCase`. Se
+  elimina `ComingSoonScreen` (sin usos). Puertos nuevos: `ImageRepository`, `WorkoutExportRepository`.
+  Cálculos puros: `TextSanitizer`, `SharedRoutineSanitizer`, `ExerciseSetGrouping`,
+  `WorkoutExportDataBuilder`. Fix: `socketTimeoutMillis = 120 s` en `SupabaseAiImportRemoteDataSource`
+  (OkHttp cortaba a los 10 s).
+- 571 tests unitarios totales (147 de dominio + helpers puros verificados sin Android SDK en
+  arnés JVM; el resto de ViewModel/Room/Feature escritos pero sin compilar por falta de SDK).
 
-**Pendiente (fases 6 a 7, ver "Planificado" en `docs/*.md`):** compartir/importar rutinas (código
-e IA), exportación de entrenamientos y endurecimiento de release. Las rutas `ImportCodeRoute` e
-`ImportImageRoute` hoy son placeholders (`ComingSoonScreen`).
+**Pendiente (FASE 7, ver "Planificado" en `docs/*.md`):** endurecimiento de release y verificación
+en dispositivo/emulador real.
 
-**FASE 5 sin verificación en dispositivo/emulador real ni compilación del árbol Android** — ver
+**FASES 5-6 sin verificación en dispositivo/emulador real ni compilación del árbol Android** — ver
 sección "Compilación" más abajo.
 
 ## Requisitos
@@ -71,16 +80,17 @@ Desde el directorio del proyecto (con el JDK de Android Studio en el PATH):
 
 ```bash
 ./gradlew assembleDebug            # APK debug
-./gradlew testDebugUnitTest         # tests unitarios (458 @Test totales, 147 verificados sin SDK)
+./gradlew testDebugUnitTest         # tests unitarios (571 @Test totales, 147 verificados sin SDK)
 ./gradlew assembleRelease           # APK release con R8 (falla si faltan las claves de Supabase)
 ./gradlew assembleDebug testDebugUnitTest   # build + tests en un solo paso
 ```
 
-**⚠️ Nota sobre FASE 5:** el código de las pantallas de dashboard, historial, progreso y perfil
-completo está escrito pero **no ha sido compilado** porque el entorno de desarrollo donde se
-escribió no tiene Android SDK. Los 147 tests de dominio y helpers puros (cálculos, conversiones,
-validaciones) de FASE 5 fueron verificados en un arnés JVM independiente fuera del repo. Para
-compilar FASE 5 en producción, se requiere:
+**⚠️ Nota sobre FASES 5-6:** el código de las pantallas de dashboard, historial, progreso, perfil
+completo, compartir/importar rutinas y exportar entrenamientos está escrito pero **no ha sido
+compilado** porque el entorno de desarrollo donde se escribió no tiene Android SDK. Los 147 tests
+de dominio y helpers puros (cálculos, conversiones, validaciones, sanitización, formateo) de FASE 5
+fueron verificados en un arnés JVM independiente fuera del repo. Para compilar FASES 5-6 en
+producción, se requiere:
 1. Una máquina con `compileSdk 36`, `targetSdk 36`, `minSdk 26` y el JDK de Android Studio.
 2. Correr `./gradlew assembleDebug testDebugUnitTest` para verificar que los tipos, imports y
    firmas de API de Compose/Navigation/Room son correctos.
