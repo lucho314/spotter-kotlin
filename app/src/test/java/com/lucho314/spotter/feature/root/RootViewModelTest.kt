@@ -7,10 +7,15 @@ import com.lucho314.spotter.domain.model.AuthState
 import com.lucho314.spotter.domain.model.AuthUser
 import com.lucho314.spotter.domain.model.ShareCode
 import com.lucho314.spotter.domain.repository.AuthRepository
+import com.lucho314.spotter.domain.usecase.RescheduleRestAlarmUseCase
 import com.lucho314.spotter.testutil.CountingLazy
+import com.lucho314.spotter.testutil.FakeActiveWorkoutRepository
 import com.lucho314.spotter.testutil.FakeAuthRepository
+import com.lucho314.spotter.testutil.FakeNetworkMonitor
 import com.lucho314.spotter.testutil.FakePreferencesRepository
+import com.lucho314.spotter.testutil.FakeRestTimerAlarmScheduler
 import com.lucho314.spotter.testutil.FakeSyncScheduler
+import com.lucho314.spotter.testutil.FakeTimeProvider
 import com.lucho314.spotter.testutil.MainDispatcherRule
 import dagger.Lazy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,7 +45,11 @@ class RootViewModelTest {
         authRepositoryLazy: Lazy<AuthRepository>,
         preferencesRepository: FakePreferencesRepository = FakePreferencesRepository(),
         syncScheduler: FakeSyncScheduler = FakeSyncScheduler(),
-    ) = RootViewModel(config, authRepositoryLazy, preferencesRepository, syncScheduler)
+        networkMonitor: FakeNetworkMonitor = FakeNetworkMonitor(),
+        rescheduleRestAlarmUseCase: RescheduleRestAlarmUseCase = RescheduleRestAlarmUseCase(
+            FakeActiveWorkoutRepository(), FakeRestTimerAlarmScheduler(), FakeTimeProvider(),
+        ),
+    ) = RootViewModel(config, authRepositoryLazy, preferencesRepository, syncScheduler, rescheduleRestAlarmUseCase, networkMonitor)
 
     /**
      * [RootViewModel.uiState] is a `WhileSubscribed` StateFlow: it needs an active collector to
@@ -70,6 +79,21 @@ class RootViewModelTest {
         assertThat(vm.uiState.value).isEqualTo(RootUiState.ConfigError)
 
         assertThat(countingLazy.getCallCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `isOnline mirrors the network monitor, for a global offline banner`() = runTest {
+        val networkMonitor = FakeNetworkMonitor(online = true)
+        val vm = rootViewModel(validConfig, lazyOf(FakeAuthRepository(AuthState.SignedIn(user))), networkMonitor = networkMonitor)
+        val collected = mutableListOf<Boolean>()
+        val job = launch { vm.isOnline.collect { collected += it } }
+        runCurrent()
+
+        networkMonitor.onlineFlow.value = false
+        runCurrent()
+
+        assertThat(collected).containsExactly(true, false).inOrder()
+        job.cancel()
     }
 
     @Test

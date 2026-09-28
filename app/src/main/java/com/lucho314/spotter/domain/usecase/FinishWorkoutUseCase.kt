@@ -2,7 +2,7 @@ package com.lucho314.spotter.domain.usecase
 
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.common.TimeProvider
-import com.lucho314.spotter.core.network.safeCall
+import com.lucho314.spotter.core.common.resultOf
 import com.lucho314.spotter.core.notifications.RestTimerAlarmScheduler
 import com.lucho314.spotter.core.work.SyncScheduler
 import com.lucho314.spotter.domain.calc.ActiveSetWeight
@@ -18,6 +18,15 @@ sealed interface FinishResult {
 
     /** No set was ever completed (RN bug #11, section 7: the RN app saved an empty session). */
     data object NothingToSave : FinishResult
+
+    /**
+     * [sessionId] no longer matches the current active session for this user (already finished or
+     * discarded elsewhere - e.g. another device, or a stale screen instance). Distinct from
+     * [NothingToSave]: the caller must not treat this as "the user chose to discard an empty
+     * workout" (review carry-over 3), since there may in fact have been completed sets that were
+     * already synced.
+     */
+    data object SessionGone : FinishResult
 }
 
 /**
@@ -34,9 +43,9 @@ class FinishWorkoutUseCase @Inject constructor(
     private val restTimerAlarmScheduler: RestTimerAlarmScheduler,
     private val timeProvider: TimeProvider,
 ) {
-    suspend operator fun invoke(userId: String, sessionId: String): AppResult<FinishResult> = safeCall {
+    suspend operator fun invoke(userId: String, sessionId: String): AppResult<FinishResult> = resultOf {
         val workout = activeWorkoutRepository.getActive(userId)?.takeIf { it.sessionId == sessionId }
-            ?: return@safeCall FinishResult.NothingToSave
+            ?: return@resultOf FinishResult.SessionGone
 
         val now = timeProvider.now()
         val pendingSets = workout.exercises.flatMap { exercise ->
@@ -53,7 +62,7 @@ class FinishWorkoutUseCase @Inject constructor(
                 )
             }
         }
-        if (pendingSets.isEmpty()) return@safeCall FinishResult.NothingToSave
+        if (pendingSets.isEmpty()) return@resultOf FinishResult.NothingToSave
 
         val pendingWorkout = PendingWorkout(
             id = workout.sessionId,

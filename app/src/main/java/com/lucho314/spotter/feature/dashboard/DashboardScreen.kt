@@ -2,8 +2,10 @@
 
 package com.lucho314.spotter.feature.dashboard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,9 +13,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -27,23 +36,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.lucho314.spotter.R
 import com.lucho314.spotter.core.designsystem.component.EmptyState
 import com.lucho314.spotter.core.designsystem.component.SectionHeader
 import com.lucho314.spotter.core.designsystem.component.SpotterButton
-import com.lucho314.spotter.core.designsystem.component.SpotterButtonVariant
+import com.lucho314.spotter.core.designsystem.component.SpotterButtonSize
 import com.lucho314.spotter.core.designsystem.component.SpotterCard
 import com.lucho314.spotter.core.designsystem.component.StatCard
 import com.lucho314.spotter.core.designsystem.theme.Spacing
 import com.lucho314.spotter.core.designsystem.theme.SpotterColors
+import com.lucho314.spotter.core.designsystem.theme.SpotterShapes
 import com.lucho314.spotter.domain.calc.WeightConverter
 import com.lucho314.spotter.domain.model.PersonalRecord
 import com.lucho314.spotter.domain.model.RoutineSummary
@@ -62,6 +78,7 @@ fun DashboardScreen(
     onCreateRoutineClick: () -> Unit,
     onRoutineClick: (String) -> Unit,
     onResumeWorkoutClick: () -> Unit,
+    onProfileClick: () -> Unit,
     /** `true`/`false` right after finishing a workout (online/offline), relayed via `SavedStateHandle`; shows a one-time success snackbar. */
     finishedWorkoutOnline: StateFlow<Boolean?>,
     onFinishedWorkoutConsumed: () -> Unit,
@@ -97,19 +114,29 @@ fun DashboardScreen(
         PullToRefreshBox(isRefreshing = uiState.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.padding(padding).fillMaxSize()) {
             LazyColumn(contentPadding = PaddingValues(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
                 item {
-                    DashboardHeader(uiState.greeting, uiState.displayName ?: stringResource(R.string.onboarding_default_name))
+                    DashboardHeader(
+                        greeting = uiState.greeting,
+                        displayName = uiState.displayName ?: stringResource(R.string.onboarding_default_name),
+                        avatarUrl = uiState.avatarUrl,
+                        onProfileClick = onProfileClick,
+                    )
                 }
 
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
+                        val sessions = sessionsThisWeekParts(uiState.sessionsThisWeek)
                         StatCard(
                             label = stringResource(R.string.dashboard_stat_this_week),
-                            value = sessionsThisWeekText(uiState.sessionsThisWeek),
+                            value = sessions.first,
+                            unit = sessions.second,
+                            shape = SpotterShapes.DashboardCard,
                             modifier = Modifier.weight(1f),
                         )
                         StatCard(
                             label = stringResource(R.string.dashboard_stat_last_session),
                             value = lastSessionText(uiState.lastSession),
+                            valueColor = SpotterColors.Secondary,
+                            shape = SpotterShapes.DashboardCard,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -120,7 +147,12 @@ fun DashboardScreen(
                     if (activeWorkoutRoutineName != null) {
                         ActiveWorkoutBanner(routineName = activeWorkoutRoutineName, onClick = onResumeWorkoutClick, modifier = Modifier.fillMaxWidth())
                     } else {
-                        SpotterButton(text = stringResource(R.string.dashboard_start_workout), onClick = onStartWorkoutClick, modifier = Modifier.fillMaxWidth())
+                        SpotterButton(
+                            text = stringResource(R.string.dashboard_start_workout),
+                            onClick = onStartWorkoutClick,
+                            size = SpotterButtonSize.Large,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
 
@@ -143,7 +175,17 @@ fun DashboardScreen(
                 item {
                     SectionHeader(
                         title = stringResource(R.string.dashboard_my_routines),
-                        action = { SpotterButton(text = stringResource(R.string.dashboard_see_all), onClick = onSeeAllRoutinesClick, variant = SpotterButtonVariant.Ghost) },
+                        action = {
+                            Text(
+                                text = stringResource(R.string.dashboard_see_all),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = SpotterColors.Secondary,
+                                modifier = Modifier
+                                    .heightIn(min = 48.dp)
+                                    .clickable(role = Role.Button, onClick = onSeeAllRoutinesClick)
+                                    .wrapContentHeight(Alignment.CenterVertically),
+                            )
+                        },
                     )
                 }
 
@@ -166,23 +208,48 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun DashboardHeader(greeting: Greeting, displayName: String) {
+private fun DashboardHeader(greeting: Greeting, displayName: String, avatarUrl: String?, onProfileClick: () -> Unit) {
     val greetingRes = when (greeting) {
         Greeting.MORNING -> R.string.dashboard_greeting_morning
         Greeting.AFTERNOON -> R.string.dashboard_greeting_afternoon
         Greeting.NIGHT -> R.string.dashboard_greeting_night
     }
-    Column {
-        Text(text = stringResource(greetingRes), style = MaterialTheme.typography.labelMedium, color = SpotterColors.OnSurfaceVariant)
-        Text(text = displayName, style = MaterialTheme.typography.headlineSmall, color = SpotterColors.OnSurface)
+    val profileCd = stringResource(R.string.dashboard_profile_cd)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Column {
+            Text(
+                text = stringResource(greetingRes),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp),
+                color = SpotterColors.OnSurfaceVariant,
+            )
+            Text(text = displayName, style = MaterialTheme.typography.headlineLarge, color = SpotterColors.OnSurface)
+        }
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(SpotterColors.SurfaceHighest)
+                .clickable(role = Role.Button, onClick = onProfileClick)
+                .semantics { contentDescription = profileCd },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (avatarUrl != null) {
+                AsyncImage(model = avatarUrl, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape))
+            } else {
+                Icon(Icons.Filled.Person, contentDescription = null, tint = SpotterColors.OnSurfaceVariant, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 
+/** (numberText, unitWordOrNull): [SectionState.Loaded] splits into a big number + a small plural
+ * unit word (e.g. "4" + "sesiones") for [StatCard]'s baseline layout; the loading/error placeholder
+ * text isn't a number, so it renders as a single plain line instead (no [Pair.second]). */
 @Composable
-private fun sessionsThisWeekText(state: SectionState<Int>): String = when (state) {
-    SectionState.Loading -> "…"
-    is SectionState.Loaded -> pluralStringResource(R.plurals.dashboard_sessions_count, state.value, state.value)
-    is SectionState.Error -> stringResource(R.string.dashboard_section_error)
+private fun sessionsThisWeekParts(state: SectionState<Int>): Pair<String, String?> = when (state) {
+    SectionState.Loading -> "…" to null
+    is SectionState.Error -> stringResource(R.string.dashboard_section_error) to null
+    is SectionState.Loaded -> state.value.toString() to pluralStringResource(R.plurals.dashboard_sessions_unit, state.value)
 }
 
 @Composable
@@ -199,8 +266,15 @@ private fun lastSessionText(state: SectionState<LastSessionLabel>): String = whe
 
 @Composable
 private fun LatestPrCard(state: SectionState<PersonalRecord?>, weightUnit: WeightUnit) {
-    SpotterCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.dashboard_latest_pr), style = MaterialTheme.typography.labelMedium, color = SpotterColors.OnSurfaceVariant)
+    SpotterCard(modifier = Modifier.fillMaxWidth(), shape = SpotterShapes.DashboardCard) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = SpotterColors.PrimaryContainer, modifier = Modifier.size(20.dp))
+            Text(
+                text = stringResource(R.string.dashboard_latest_pr),
+                style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
+                color = SpotterColors.PrimaryContainer,
+            )
+        }
         when (state) {
             SectionState.Loading -> Text(text = "…", style = MaterialTheme.typography.headlineSmall, color = SpotterColors.PrimaryContainer)
             is SectionState.Error -> Text(text = stringResource(R.string.dashboard_section_error), style = MaterialTheme.typography.bodyMedium, color = SpotterColors.OnSurfaceVariant)
@@ -209,12 +283,22 @@ private fun LatestPrCard(state: SectionState<PersonalRecord?>, weightUnit: Weigh
                 if (pr == null) {
                     Text(text = stringResource(R.string.dashboard_latest_pr_empty), style = MaterialTheme.typography.bodyMedium, color = SpotterColors.OnSurfaceVariant)
                 } else {
+                    if (pr.exerciseName != null) {
+                        Text(text = pr.exerciseName, style = MaterialTheme.typography.titleLarge, color = SpotterColors.OnSurface)
+                    }
                     val unitLabel = if (weightUnit == WeightUnit.KG) stringResource(R.string.unit_kg) else stringResource(R.string.unit_lb)
-                    Text(
-                        text = stringResource(R.string.dashboard_latest_pr_value, WeightConverter.formatOneDecimal(pr.estimated1RmKg, weightUnit), unitLabel),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = SpotterColors.PrimaryContainer,
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xxs), verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = WeightConverter.formatOneDecimal(pr.estimated1RmKg, weightUnit),
+                            style = MaterialTheme.typography.displayMedium,
+                            color = SpotterColors.PrimaryContainer,
+                        )
+                        Text(
+                            text = stringResource(R.string.dashboard_latest_pr_unit, unitLabel),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = SpotterColors.OnSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -224,9 +308,25 @@ private fun LatestPrCard(state: SectionState<PersonalRecord?>, weightUnit: Weigh
 @Composable
 private fun DashboardRoutineCard(routine: RoutineSummary, onClick: () -> Unit) {
     SpotterCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Text(text = routine.name, style = MaterialTheme.typography.titleMedium, color = SpotterColors.OnSurface)
-        if (routine.description != null) {
-            Text(text = routine.description, style = MaterialTheme.typography.bodyMedium, color = SpotterColors.OnSurfaceVariant, maxLines = 2)
+        Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = routine.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = SpotterColors.OnSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = SpotterColors.OnSurfaceVariant)
+        }
+        if (routine.days.isNotEmpty()) {
+            Text(
+                text = routine.days.joinToString(" · ") { it.name },
+                style = MaterialTheme.typography.labelMedium,
+                color = SpotterColors.Primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

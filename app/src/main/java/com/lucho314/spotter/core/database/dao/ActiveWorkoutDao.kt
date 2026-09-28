@@ -81,6 +81,12 @@ interface ActiveWorkoutDao {
     )
     suspend fun setRestTimer(sessionId: String, endsAtEpochMs: Long?, totalSeconds: Int?)
 
+    @Query(
+        "UPDATE active_session SET rest_ends_at_epoch_ms = NULL, rest_total_seconds = NULL " +
+            "WHERE id = :sessionId AND rest_ends_at_epoch_ms = :expectedEndsAtEpochMs",
+    )
+    suspend fun clearRestTimerIfMatches(sessionId: String, expectedEndsAtEpochMs: Long): Int
+
     @Query("DELETE FROM active_session WHERE id = :id")
     suspend fun deleteSession(id: String)
 

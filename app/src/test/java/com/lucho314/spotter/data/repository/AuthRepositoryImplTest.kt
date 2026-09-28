@@ -139,6 +139,36 @@ class AuthRepositoryImplTest {
     }
 
     @Test
+    fun `currentUser stays consistent with authState during a RefreshFailure`() = runTest {
+        val user = UserInfo(aud = "authenticated", id = "user-1", userMetadata = JsonObject(emptyMap()))
+        sessionManager.saveSession(
+            UserSession(accessToken = "a", refreshToken = "r", expiresIn = 3600, tokenType = "bearer", user = user),
+        )
+        dataSource.status.value = SessionStatus.RefreshFailure(RefreshFailureCause.NetworkError(IOException("offline")))
+        // authDataSource.currentUserOrNull() (the SDK's raw in-memory user) is null in this scenario
+        // - only authState's cached/persisted fallback has a user - which used to make every
+        // currentUser() caller (WorkoutViewModel, RoutineDetailViewModel, SyncPendingWorkoutsUseCase...)
+        // behave as if signed out while offline with an expired token.
+        dataSource.currentUser = null
+
+        // Observing authState at least once (as RootViewModel always does) primes the consistency
+        // check; currentUser() must then report the same cached user authState did.
+        val state = repository.authState.first()
+
+        assertThat(state).isInstanceOf(AuthState.SignedIn::class.java)
+        assertThat(repository.currentUser()?.id).isEqualTo("user-1")
+    }
+
+    @Test
+    fun `currentUser returns null once authState resolves to a real sign-out`() = runTest {
+        dataSource.status.value = SessionStatus.NotAuthenticated()
+
+        repository.authState.first()
+
+        assertThat(repository.currentUser()).isNull()
+    }
+
+    @Test
     fun `authState treats a fail-closed keystore error as no last known user instead of crashing`() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val scope = TestScope(UnconfinedTestDispatcher())

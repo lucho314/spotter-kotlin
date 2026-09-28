@@ -47,6 +47,22 @@ class WorkoutHistoryRepositoryImplTest {
     }
 
     @Test
+    fun `getLastSession orders sets by setNumber, not by completion order`() = runTest {
+        // The remote query is DESC by completed_at (to cheaply find the latest session); within
+        // that session the sets must still come back in set_number order for display.
+        remote.lastSessionSets = listOf(
+            set("session-new", setNumber = 3, completedAt = "2026-01-15T11:10:00Z"),
+            set("session-new", setNumber = 1, completedAt = "2026-01-15T11:00:00Z"),
+            set("session-new", setNumber = 2, completedAt = "2026-01-15T11:05:00Z"),
+        )
+
+        val result = repository.getLastSession("user-1", exerciseId = 42)
+
+        val session = (result as AppResult.Success).value
+        assertThat(session?.sets?.map { it.setNumber }).containsExactly(1, 2, 3).inOrder()
+    }
+
+    @Test
     fun `getLastSession returns null when there are no matching sets`() = runTest {
         remote.lastSessionSets = emptyList()
 

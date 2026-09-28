@@ -71,6 +71,30 @@ class ToggleSetCompletionUseCaseTest {
     }
 
     @Test
+    fun `blank reps reports SET_INPUTS_EMPTY, not a range error`() = runTest {
+        val workout = workout(weightText = "80", repsText = "")
+        activeWorkoutRepository.start(workout)
+
+        val result = useCase(workout, exerciseRowId = 1L, setId = "set-1")
+
+        assertThat(result).isInstanceOf(AppResult.Failure::class.java)
+        val error = (result as AppResult.Failure).error as AppError.Validation
+        assertThat(error.reason).isEqualTo(ValidationReason.SET_INPUTS_EMPTY)
+    }
+
+    @Test
+    fun `out-of-range reps reports WORKOUT_REPS_RANGE (1-200), not the routine target's REPS_RANGE (1-100)`() = runTest {
+        val workout = workout(weightText = "80", repsText = "500")
+        activeWorkoutRepository.start(workout)
+
+        val result = useCase(workout, exerciseRowId = 1L, setId = "set-1")
+
+        assertThat(result).isInstanceOf(AppResult.Failure::class.java)
+        val error = (result as AppResult.Failure).error as AppError.Validation
+        assertThat(error.reason).isEqualTo(ValidationReason.WORKOUT_REPS_RANGE)
+    }
+
+    @Test
     fun `completing a set always restarts the rest timer`() = runTest {
         val workout = workout()
         activeWorkoutRepository.start(workout)

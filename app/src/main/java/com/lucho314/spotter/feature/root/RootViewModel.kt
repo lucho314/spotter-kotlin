@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lucho314.spotter.core.config.AppConfig
 import com.lucho314.spotter.core.navigation.DeepLink
+import com.lucho314.spotter.core.network.NetworkMonitor
 import com.lucho314.spotter.core.work.SyncScheduler
 import com.lucho314.spotter.domain.model.AuthState
 import com.lucho314.spotter.domain.model.ShareCode
 import com.lucho314.spotter.domain.repository.AuthRepository
 import com.lucho314.spotter.domain.repository.PreferencesRepository
+import com.lucho314.spotter.domain.usecase.RescheduleRestAlarmUseCase
 import dagger.Lazy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -41,7 +43,13 @@ class RootViewModel @Inject constructor(
     private val authRepositoryLazy: Lazy<AuthRepository>,
     private val preferencesRepository: PreferencesRepository,
     private val syncScheduler: SyncScheduler,
+    private val rescheduleRestAlarmUseCase: RescheduleRestAlarmUseCase,
+    networkMonitor: NetworkMonitor,
 ) : ViewModel() {
+
+    /** Drives a global "Sin conexión" banner (any authenticated screen), not just [com.lucho314.spotter.feature.workout.WorkoutScreen]'s own. */
+    val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     private val _pendingImportCode = MutableStateFlow<ShareCode?>(null)
 
@@ -85,6 +93,10 @@ class RootViewModel @Inject constructor(
                                 lastSyncedUserId = state.user.id
                                 authRepositoryLazy.get().syncProfileDisplayName(state.user)
                                 syncScheduler.schedule()
+                                // AlarmManager alarms don't survive a reboot; Room's persisted
+                                // RestTimer might, so re-arm it (or clear it if it already
+                                // elapsed) once per process (review carry-over 13).
+                                rescheduleRestAlarmUseCase(state.user.id)
                             }
                         }
 

@@ -237,17 +237,22 @@
     <string name="workout_discard_confirm_title">Cancelar entrenamiento</string>
     <string name="workout_discard_confirm_message">¿Salís sin guardar? Vas a perder el progreso de esta sesión.</string>
     <string name="workout_offline_banner">Sin conexión — los entrenamientos se guardan localmente</string>
+    <string name="offline_banner_global">Sin conexión</string>
     <string name="workout_finished_online">¡Entrenamiento completado!</string>
     <string name="workout_finished_offline">Guardado sin conexión. Se sincronizará cuando vuelva internet.</string>
     <string name="workout_exercise_index">EJERCICIO %1$d DE %2$d</string>
+    <string name="workout_select_exercise_dot">Ir al ejercicio %1$d</string>
     <string name="workout_last_session">Último entrenamiento</string>
     <string name="workout_last_session_title">Último entrenamiento</string>
     <string name="workout_last_session_empty">Todavía no entrenaste este ejercicio.</string>
+    <string name="workout_last_session_total_volume">Volumen total</string>
     <string name="workout_rest_label">DESCANSO</string>
+    <string name="workout_rest_seconds_format">%1$ds</string>
     <string name="workout_rest_skip">Saltar</string>
     <string name="workout_unit_kg">KG</string>
     <string name="workout_unit_lb">LB</string>
     <string name="workout_reps_header">REPS</string>
+    <string name="workout_reps_placeholder">reps</string>
     <string name="workout_set_complete">Completar serie</string>
     <string name="workout_set_uncomplete">Descompletar serie</string>
     <string name="workout_add_set">Agregar serie</string>
@@ -268,6 +273,7 @@
     <!-- Validation reasons (FASE 5) -->
     <string name="validation_workout_reps_range">Las repeticiones deben estar entre 1 y 200.</string>
     <string name="validation_age_range">La edad debe estar entre 10 y 100 años.</string>
+    <string name="validation_set_inputs_empty">Ingresá peso y repeticiones.</string>
 
     <!-- Shared plural: pending/failed outbox count (dashboard chip, history banner). -->
     <plurals name="pending_sync_count">
@@ -280,9 +286,11 @@
     <string name="dashboard_greeting_afternoon">BUENAS TARDES</string>
     <string name="dashboard_greeting_night">BUENAS NOCHES</string>
     <string name="dashboard_stat_this_week">ESTA SEMANA</string>
-    <plurals name="dashboard_sessions_count">
-        <item quantity="one">%1$d sesión</item>
-        <item quantity="other">%1$d sesiones</item>
+    <!-- Unit word alone (no count placeholder): the RN look shows the number big/lime and this
+         word small/gray right after it, not as one single string. -->
+    <plurals name="dashboard_sessions_unit">
+        <item quantity="one">sesión</item>
+        <item quantity="other">sesiones</item>
     </plurals>
     <string name="dashboard_stat_last_session">ÚLTIMA SESIÓN</string>
     <string name="dashboard_last_session_today">Hoy</string>
@@ -294,13 +302,16 @@
     <string name="dashboard_last_session_none">-</string>
     <string name="dashboard_start_workout">Iniciar Entrenamiento</string>
     <string name="dashboard_latest_pr">ÚLTIMO PR</string>
-    <string name="dashboard_latest_pr_value">%1$s %2$s (1RM est.)</string>
+    <!-- Unit + qualifier suffix alone, shown small/gray right after the big/lime number (see
+         `dashboard_sessions_unit`'s comment). -->
+    <string name="dashboard_latest_pr_unit">%1$s (1RM est.)</string>
     <string name="dashboard_latest_pr_empty">Todavía no registraste PRs</string>
     <string name="dashboard_my_routines">Mis Rutinas</string>
     <string name="dashboard_see_all">Ver todas</string>
     <string name="dashboard_empty_title">¡Empezá ahora!</string>
     <string name="dashboard_empty_description">Creá tu primera rutina para empezar a entrenar.</string>
     <string name="dashboard_section_error">No se pudo cargar</string>
+    <string name="dashboard_profile_cd">Ir a tu perfil</string>
 
     <!-- History -->
     <string name="history_title">Historial</string>

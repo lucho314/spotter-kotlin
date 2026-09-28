@@ -72,3 +72,34 @@
 
 ## Post-FASE 4 fix (2026-09-26)
 - [RESUELTO] `core/navigation/SpotterNavHost.kt`: `RoutineDetailScreen`'s start-workout callback (driven by the async `RoutineDetailEvent.WorkoutStarted`, not a click) was wrapped in `dropUnlessResumed`; `ObserveAsEvents` can deliver at STARTED (before ON_RESUME), so the navigation was silently dropped and the workout was created but never opened. Fixed: renamed to `onOpenWorkout`, unguarded; new `NavController.navigateToWorkout()` (`launchSingleTop = true`) used by all three entry points (routines banner, `onOpenWorkout`, rest-finished notification via `SpotterRoot`), which also prevents stacking a second `WorkoutScreen` when the notification is tapped while the workout is already open. Not covered by an automated test (no Compose/Navigation UI test infrastructure) and **not compiled in the session that made the change** (no Android SDK available there) - run `./gradlew assembleDebug testDebugUnitTest` locally.
+
+## FASE 4 review cycle 1 fixes (implementer, 2026-09-27)
+
+All 13 findings + 5 observations in `review_fase4_cycle1.md` addressed; see that file for the
+one-line note per item. Highlights not obvious from the file names alone:
+
+- `AuthRepositoryImpl.currentUser()` fix (item 1) is the most structurally important one: it now
+  mirrors the last value `authState` itself emitted (a new `lastKnownAuthState` field, set as a side
+  effect of the same `.map{}` that computes `authState`), rather than asking the SDK directly. Every
+  caller of `currentUser()` was audited; none needed additional changes since the fix is transparent
+  to them.
+- `PendingWorkout.attempts: Int` (default `0`) is a new field in the domain model, mapped from the
+  Room entity's already-existing (previously unused) `attempts` column - not a schema change.
+- `WorkoutViewModel`'s draft text moved from a `MutableStateFlow` folded into `uiState`'s
+  `combine()`/`stateIn()` to `mutableStateMapOf` (Compose snapshot state), read directly by
+  `WorkoutScreen` via `WorkoutViewModel.display(set)` - this is the one architecturally distinct
+  choice worth a maintainer's attention if adding new per-keystroke UI state elsewhere.
+- Two items (`ErrorMapper.isUnauthorizedCode`, `isRoutineForeignKeyViolation`) are tested as pure
+  functions rather than through a real `PostgrestRestException`/`RestException`: the codebase has no
+  existing example of constructing one in a test (its constructor needs a live Ktor `HttpResponse`
+  with an in-flight request), so this follows the same pattern as `AuthStateMapper` (pure, testable
+  extraction) rather than introducing a hand-rolled Ktor fake.
+- Item 9 (offline banner "global") was interpreted as *adding* a root-level banner
+  (`RootViewModel.isOnline` + `SpotterRoot`) shown on every authenticated screen, while leaving
+  `WorkoutScreen`'s own existing (more specific: "los entrenamientos se guardan localmente") banner
+  in place - so the workout screen can show both at once while offline. Consider consolidating into
+  one mechanism in a future pass if that reads as redundant in practice.
+- Baseline before this cycle: `./gradlew assembleDebug testDebugUnitTest` green, 571 tests. After:
+  still green, 608 tests (37 new), `./gradlew assembleDebug testDebugUnitTest assembleRelease` all
+  green (R8 + lintVital included). No `!!`, no `feature`→`data` or `domain`→`data`/`core.network`
+  imports (grepped repo-wide, not just touched files).

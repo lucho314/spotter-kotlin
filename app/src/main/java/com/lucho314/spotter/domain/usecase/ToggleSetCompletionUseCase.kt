@@ -37,11 +37,18 @@ class ToggleSetCompletionUseCase @Inject constructor(
             return AppResult.Success(Unit)
         }
 
+        // Blank reps isn't "out of range" (that message reads oddly for an empty field) - prompt
+        // for both inputs instead, matching how an untouched fresh set actually looks to the user.
+        if (set.repsText.isBlank()) {
+            return AppResult.Failure(AppError.Validation(ValidationReason.SET_INPUTS_EMPTY))
+        }
         if (ActiveSetWeight.parse(set.weightText, exercise.equipment) == null) {
             return AppResult.Failure(AppError.Validation(ValidationReason.WEIGHT_INVALID))
         }
         if (WeightInputParser.parseReps(set.repsText) == null) {
-            return AppResult.Failure(AppError.Validation(ValidationReason.REPS_RANGE))
+            // WORKOUT_REPS_RANGE (1..200, WeightInputParser.parseReps), not REPS_RANGE (1..100 -
+            // that one is for a *routine's* target reps, a different range/screen entirely).
+            return AppResult.Failure(AppError.Validation(ValidationReason.WORKOUT_REPS_RANGE))
         }
 
         val now = timeProvider.now()

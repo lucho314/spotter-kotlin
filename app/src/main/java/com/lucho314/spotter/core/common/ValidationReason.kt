@@ -32,4 +32,11 @@ enum class ValidationReason {
 
     /** Age (whole years) must be in 10..100. */
     AGE_RANGE,
+
+    /**
+     * [com.lucho314.spotter.domain.usecase.ToggleSetCompletionUseCase]: the reps field is simply
+     * blank, not "out of range" - a range error ("must be between 1 and 200") reads oddly for an
+     * empty field, so this prompts for both inputs instead.
+     */
+    SET_INPUTS_EMPTY,
 }

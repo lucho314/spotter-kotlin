@@ -19,6 +19,7 @@ import com.lucho314.spotter.testutil.FakeActiveWorkoutRepository
 import com.lucho314.spotter.testutil.FakeAuthRepository
 import com.lucho314.spotter.testutil.FakeIdGenerator
 import com.lucho314.spotter.testutil.FakePreferencesRepository
+import com.lucho314.spotter.testutil.FakeRestTimerAlarmScheduler
 import com.lucho314.spotter.testutil.FakeRoutineRepository
 import com.lucho314.spotter.testutil.FakeTimeProvider
 import com.lucho314.spotter.testutil.MainDispatcherRule
@@ -63,7 +64,7 @@ class RoutineDetailViewModelTest {
     ) = RoutineDetailViewModel(
         SavedStateHandle(mapOf("routineId" to "r1")),
         routineRepository,
-        StartWorkoutUseCase(routineRepository, activeWorkoutRepository, FakePreferencesRepository(), FakeIdGenerator(), timeProvider),
+        StartWorkoutUseCase(routineRepository, activeWorkoutRepository, FakePreferencesRepository(), FakeIdGenerator(), timeProvider, FakeRestTimerAlarmScheduler()),
         com.lucho314.spotter.domain.usecase.ShareRoutineUseCase(sharingRepository, java.security.SecureRandom()),
         timeProvider,
         FakeAuthRepository(AuthState.SignedIn(user)),

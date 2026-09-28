@@ -84,6 +84,27 @@ class FinishWorkoutUseCaseTest {
     }
 
     @Test
+    fun `a sessionId that no longer matches the active workout reports SessionGone, not NothingToSave`() = runTest {
+        val workout = workout(WeightUnit.KG, listOf(set("set-1", "80", "10", Instant.ofEpochSecond(10))))
+        activeWorkoutRepository.start(workout)
+
+        // "session-1" is the real one; a stale caller asking to finish a different (already
+        // finished/discarded elsewhere) session must not be told "nothing to save" - that would
+        // read as "the user's own empty session was discarded", which may not be true at all.
+        val result = useCase(USER_ID, "some-other-stale-session-id")
+
+        assertThat(result).isEqualTo(AppResult.Success(FinishResult.SessionGone))
+        assertThat(activeWorkoutRepository.movedToOutbox).isEmpty()
+    }
+
+    @Test
+    fun `no active workout at all also reports SessionGone`() = runTest {
+        val result = useCase(USER_ID, "session-1")
+
+        assertThat(result).isEqualTo(AppResult.Success(FinishResult.SessionGone))
+    }
+
+    @Test
     fun `schedules the sync worker and cancels the rest alarm on success`() = runTest {
         val workout = workout(WeightUnit.KG, listOf(set("set-1", "80", "10", Instant.ofEpochSecond(10))))
         activeWorkoutRepository.start(workout)

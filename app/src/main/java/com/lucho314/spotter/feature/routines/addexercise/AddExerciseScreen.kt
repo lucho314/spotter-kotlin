@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -93,7 +94,10 @@ fun AddExerciseScreen(
                 modifier = Modifier.padding(padding),
             )
 
-            else -> Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            // `imePadding()`: shrinks the results list above the keyboard instead of letting it
+            // cover matches while the search field is focused (the field itself is above the
+            // list, so it stays visible either way).
+            else -> Column(modifier = Modifier.padding(padding).fillMaxSize().imePadding()) {
                 SpotterTextField(
                     value = uiState.searchQuery,
                     onValueChange = viewModel::onSearchQueryChange,

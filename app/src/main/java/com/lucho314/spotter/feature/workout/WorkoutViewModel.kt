@@ -1,6 +1,8 @@
 package com.lucho314.spotter.feature.workout
 
 import androidx.annotation.StringRes
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lucho314.spotter.core.common.AppResult
@@ -16,6 +18,7 @@ import com.lucho314.spotter.domain.model.LastExerciseSession
 import com.lucho314.spotter.domain.repository.ActiveWorkoutRepository
 import com.lucho314.spotter.domain.repository.AuthRepository
 import com.lucho314.spotter.domain.repository.WorkoutHistoryRepository
+import com.lucho314.spotter.feature.common.SpotterDateFormats
 import com.lucho314.spotter.domain.usecase.DiscardWorkoutUseCase
 import com.lucho314.spotter.domain.usecase.FinishResult
 import com.lucho314.spotter.domain.usecase.FinishWorkoutUseCase
@@ -42,7 +45,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** A set's in-flight edited text, ahead of what's persisted to Room ([WorkoutViewModel]'s debounce window). */
@@ -51,7 +53,6 @@ data class InputDraft(val weightText: String, val repsText: String)
 data class WorkoutUiState(
     val loading: Boolean = true,
     val workout: ActiveWorkout? = null,
-    val drafts: Map<String, InputDraft> = emptyMap(),
     val now: Instant = Instant.EPOCH,
     val online: Boolean = true,
 ) {
@@ -66,16 +67,12 @@ data class WorkoutUiState(
 
     val completedSetCount: Int
         get() = workout?.completedSetCount ?: 0
-
-    /** [set] overlaid with its in-flight [drafts] text, if any (so typing shows immediately, without waiting for the debounced Room round-trip). */
-    fun display(set: ActiveSet): ActiveSet =
-        drafts[set.id]?.let { set.copy(weightText = it.weightText, repsText = it.repsText) } ?: set
 }
 
 sealed interface LastSessionUiState {
     data object Hidden : LastSessionUiState
     data object Loading : LastSessionUiState
-    data class Loaded(val session: LastExerciseSession?) : LastSessionUiState
+    data class Loaded(val session: LastExerciseSession?, val dateText: String?) : LastSessionUiState
     data class Error(@StringRes val messageRes: Int) : LastSessionUiState
 }
 
@@ -117,7 +114,16 @@ class WorkoutViewModel @Inject constructor(
 
     private val userId = authRepository.currentUser()?.id.orEmpty()
 
-    private val drafts = MutableStateFlow<Map<String, InputDraft>>(emptyMap())
+    /**
+     * Compose snapshot state, not a [kotlinx.coroutines.flow.StateFlow]/`combine()` pipeline
+     * (review carry-over 10): a set's in-flight text used to be folded into [uiState] alongside the
+     * 1s [ticker] and [NetworkMonitor.isOnline], so every keystroke's UI update was delayed behind
+     * a coroutine dispatch and recomposed together with unrelated ticks - under fast typing this
+     * could visibly drop characters or jump the cursor. Writing here is synchronous and read
+     * directly by [WorkoutScreen] (via [display]), so a keystroke shows immediately; the debounced
+     * Room persistence below is unaffected.
+     */
+    private val drafts: SnapshotStateMap<String, InputDraft> = mutableStateMapOf()
     private val persistJobs = mutableMapOf<String, Job>()
 
     private val eventChannel = Channel<WorkoutEvent>(Channel.BUFFERED)
@@ -149,9 +155,8 @@ class WorkoutViewModel @Inject constructor(
     val uiState: StateFlow<WorkoutUiState> = combine(
         activeWorkoutRepository.observeActive(userId),
         ticker,
-        drafts,
         networkMonitor.isOnline,
-    ) { workout, now, draftMap, online ->
+    ) { workout, now, online ->
         if (workout != null) {
             notifiedNoActiveWorkout = false
             maybeHandleRestFinished(workout, now)
@@ -159,8 +164,12 @@ class WorkoutViewModel @Inject constructor(
             notifiedNoActiveWorkout = true
             eventChannel.trySend(WorkoutEvent.NoActiveWorkout)
         }
-        WorkoutUiState(loading = false, workout = workout, drafts = draftMap, now = now, online = online)
+        WorkoutUiState(loading = false, workout = workout, now = now, online = online)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WorkoutUiState())
+
+    /** [set] overlaid with its in-flight [drafts] text, if any (so typing shows immediately, without waiting for the debounced Room round-trip). */
+    fun display(set: ActiveSet): ActiveSet =
+        drafts[set.id]?.let { set.copy(weightText = it.weightText, repsText = it.repsText) } ?: set
 
     /**
      * The rest timer reaching zero only matters here while this screen is actually being collected
@@ -174,8 +183,14 @@ class WorkoutViewModel @Inject constructor(
         if (rest.remainingSeconds(now) > 0) return
         if (lastRestEndsAtNotified == rest.endsAt) return
         lastRestEndsAtNotified = rest.endsAt
-        activeWorkoutRepository.setRestTimer(workout.sessionId, null)
-        eventChannel.trySend(WorkoutEvent.RestFinished)
+        // Conditional on the DAO still holding this exact `endsAt`: `workout` here can be a stale
+        // snapshot (this combine() emission race with a completed-set write), so an unconditional
+        // clear could wipe out a brand *new* rest period that already started in the meantime.
+        // If it no longer matches, that new period is what's actually running - don't beep for the
+        // old one either.
+        if (activeWorkoutRepository.clearRestTimerIfMatches(workout.sessionId, rest.endsAt)) {
+            eventChannel.trySend(WorkoutEvent.RestFinished)
+        }
     }
 
     fun onWeightChange(setId: String, text: String) {
@@ -189,13 +204,13 @@ class WorkoutViewModel @Inject constructor(
     }
 
     private fun currentDraftOrSet(setId: String): InputDraft {
-        drafts.value[setId]?.let { return it }
+        drafts[setId]?.let { return it }
         val set = uiState.value.workout?.exercises?.firstNotNullOfOrNull { exercise -> exercise.sets.firstOrNull { it.id == setId } }
         return InputDraft(weightText = set?.weightText.orEmpty(), repsText = set?.repsText.orEmpty())
     }
 
     private fun updateDraft(setId: String, transform: (InputDraft) -> InputDraft) {
-        drafts.update { current -> current + (setId to transform(current[setId] ?: currentDraftOrSet(setId))) }
+        drafts[setId] = transform(drafts[setId] ?: currentDraftOrSet(setId))
     }
 
     private fun schedulePersist(setId: String) {
@@ -207,14 +222,14 @@ class WorkoutViewModel @Inject constructor(
     }
 
     private suspend fun flushDraft(setId: String) {
-        val draft = drafts.value[setId] ?: return
+        val draft = drafts[setId] ?: return
         updateSetInputUseCase(setId, draft.weightText, draft.repsText)
     }
 
     private suspend fun flushAllDrafts() {
         persistJobs.values.forEach { it.cancel() }
         persistJobs.clear()
-        drafts.value.keys.toList().forEach { flushDraft(it) }
+        drafts.keys.toList().forEach { flushDraft(it) }
     }
 
     fun onToggleSet(exerciseRowId: Long, setId: String) {
@@ -222,7 +237,7 @@ class WorkoutViewModel @Inject constructor(
             persistJobs[setId]?.cancel()
             persistJobs.remove(setId)
             flushDraft(setId)
-            drafts.update { it - setId }
+            drafts.remove(setId)
             val workout = activeWorkoutRepository.getActive(userId) ?: return@launch
             when (val result = toggleSetCompletionUseCase(workout, exerciseRowId, setId)) {
                 is AppResult.Success -> Unit
@@ -233,6 +248,10 @@ class WorkoutViewModel @Inject constructor(
 
     fun onAddSet(exerciseRowId: Long) {
         viewModelScope.launch {
+            // Without this, a just-typed (but not yet debounce-flushed) weight/reps edit on the
+            // last set would be invisible here: the new set would copy Room's stale pre-edit text
+            // instead of what the user actually just entered.
+            flushAllDrafts()
             val workout = activeWorkoutRepository.getActive(userId) ?: return@launch
             val exercise = workout.exercises.firstOrNull { it.rowId == exerciseRowId } ?: return@launch
             val last = exercise.sets.lastOrNull()
@@ -267,6 +286,10 @@ class WorkoutViewModel @Inject constructor(
                 is AppResult.Success -> when (result.value) {
                     FinishResult.Saved -> eventChannel.send(WorkoutEvent.Finished(online = networkMonitor.isOnline.first()))
                     FinishResult.NothingToSave -> eventChannel.send(WorkoutEvent.Discarded)
+                    // Not a user-chosen discard: the session was already gone (finished/discarded
+                    // elsewhere). Report it the same way the normal "no active workout" race is
+                    // reported instead of misleadingly claiming *this* screen discarded it.
+                    FinishResult.SessionGone -> eventChannel.send(WorkoutEvent.NoActiveWorkout)
                 }
 
                 is AppResult.Failure -> {
@@ -290,7 +313,10 @@ class WorkoutViewModel @Inject constructor(
         _lastSessionState.value = LastSessionUiState.Loading
         viewModelScope.launch {
             when (val result = workoutHistoryRepository.getLastSession(userId, exerciseId)) {
-                is AppResult.Success -> _lastSessionState.value = LastSessionUiState.Loaded(result.value)
+                is AppResult.Success -> _lastSessionState.value = LastSessionUiState.Loaded(
+                    session = result.value,
+                    dateText = result.value?.let { SpotterDateFormats.longDay(it.date, timeProvider.zone()) },
+                )
                 is AppResult.Failure -> _lastSessionState.value = LastSessionUiState.Error(result.error.toMessageRes())
             }
         }
@@ -301,6 +327,16 @@ class WorkoutViewModel @Inject constructor(
     }
 
     /**
+     * Flushes any in-flight (still-debounced) draft text right away. Called from
+     * [WorkoutScreen] on [androidx.lifecycle.Lifecycle.Event.ON_STOP] so backgrounding the app
+     * mid-keystroke - and the process later being killed while backgrounded - can't silently lose
+     * up to [schedulePersist]'s 300ms debounce window of typed text.
+     */
+    fun onStop() {
+        viewModelScope.launch { flushAllDrafts() }
+    }
+
+    /**
      * `viewModelScope` is already cancelled by the time [onCleared] runs, so the last (at most
      * 300ms old) unflushed keystrokes need a scope that outlives it - a short-lived one, since this
      * is only meant to finish the handful of pending upserts already scheduled by [schedulePersist],
@@ -308,7 +344,7 @@ class WorkoutViewModel @Inject constructor(
      */
     override fun onCleared() {
         super.onCleared()
-        val pending = drafts.value
+        val pending = drafts.toMap()
         if (pending.isEmpty()) return
         CoroutineScope(SupervisorJob() + ioDispatcher).launch {
             pending.forEach { (setId, draft) -> updateSetInputUseCase(setId, draft.weightText, draft.repsText) }

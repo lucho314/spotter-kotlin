@@ -54,3 +54,33 @@ class SafeCallTest {
         assertThat(result).isEqualTo(AppResult.Success(42))
     }
 }
+
+/**
+ * [ErrorMapper.isUnauthorizedCode] is exercised directly rather than through a real
+ * [io.github.jan.supabase.postgrest.exception.PostgrestRestException]: that exception's
+ * constructor eagerly builds its message from a real Ktor `HttpResponse`'s in-flight request
+ * (`HttpResponseKt.getRequest`), which would need a hand-rolled fake of several Ktor internals to
+ * construct in a unit test - the actual decision logic this review item cares about is this pure
+ * function.
+ */
+class ErrorMapperIsUnauthorizedCodeTest {
+
+    @Test
+    fun `HTTP 401 is unauthorized regardless of code`() {
+        assertThat(ErrorMapper.isUnauthorizedCode(statusCode = 401, code = null)).isTrue()
+        assertThat(ErrorMapper.isUnauthorizedCode(statusCode = 401, code = "42501")).isTrue()
+    }
+
+    @Test
+    fun `PGRST301, PGRST302 and PGRST303 are unauthorized regardless of status code`() {
+        assertThat(ErrorMapper.isUnauthorizedCode(statusCode = 400, code = "PGRST301")).isTrue()
+        assertThat(ErrorMapper.isUnauthorizedCode(statusCode = 400, code = "PGRST302")).isTrue()
+        assertThat(ErrorMapper.isUnauthorizedCode(statusCode = 400, code = "PGRST303")).isTrue()
+    }
+
+    @Test
+    fun `an unrelated 4xx with an unrelated code is not unauthorized`() {
+        assertThat(ErrorMapper.isUnauthorizedCode(statusCode = 403, code = "42501")).isFalse()
+        assertThat(ErrorMapper.isUnauthorizedCode(statusCode = 404, code = "PGRST116")).isFalse()
+    }
+}

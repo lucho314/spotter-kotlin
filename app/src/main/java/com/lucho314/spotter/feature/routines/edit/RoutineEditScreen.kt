@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -87,7 +90,10 @@ fun RoutineEditScreen(
             )
 
             else -> Column(
-                modifier = Modifier.padding(padding).fillMaxSize().padding(Spacing.xl),
+                // `verticalScroll` + `imePadding`: this Column isn't inside a LazyColumn like most
+                // other screens, so without its own scroll it would have no way to keep the save
+                // button reachable once the keyboard takes part of the screen's height.
+                modifier = Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(Spacing.xl),
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 if (!uiState.isEditing && uiState.templateCount != null) {

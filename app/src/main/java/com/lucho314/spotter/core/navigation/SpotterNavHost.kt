@@ -120,6 +120,7 @@ fun SpotterNavHost(
                 onCreateRoutineClick = dropUnlessResumed { navController.navigate(RoutineEditRoute()) },
                 onRoutineClick = lifecycleOwner.dropUnlessResumed1 { routineId -> navController.navigate(RoutineDetailRoute(routineId)) },
                 onResumeWorkoutClick = dropUnlessResumed { navController.navigateToWorkout() },
+                onProfileClick = dropUnlessResumed { navController.navigateToTopLevel(TopLevelDestination.PROFILE) },
                 finishedWorkoutOnline = finishedWorkoutOnlineFlow,
                 onFinishedWorkoutConsumed = { entry.savedStateHandle.remove<Boolean>(KEY_WORKOUT_FINISHED_ONLINE) },
             )

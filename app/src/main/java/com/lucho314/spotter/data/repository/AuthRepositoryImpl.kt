@@ -8,6 +8,7 @@ import com.lucho314.spotter.core.security.EncryptedSessionManager
 import com.lucho314.spotter.data.mapper.AuthStateMapper
 import com.lucho314.spotter.data.mapper.toDomain
 import com.lucho314.spotter.data.remote.datasource.AuthDataSource
+import com.lucho314.spotter.domain.model.AuthState
 import com.lucho314.spotter.domain.model.AuthUser
 import com.lucho314.spotter.domain.repository.AuthRepository
 import io.github.jan.supabase.auth.SignOutScope
@@ -37,6 +38,15 @@ class AuthRepositoryImpl @Inject constructor(
     @Volatile
     private var cachedLastKnownUser: AuthUser? = null
 
+    // Mirrors the last value emitted by [authState], so [currentUser] (a plain synchronous getter
+    // many call sites use, e.g. in a ViewModel's constructor/init) never diverges from what the UI
+    // is actually showing. Before this field existed, currentUser() delegated straight to
+    // authDataSource.currentUserOrNull(), which is null unless SessionStatus is exactly
+    // Authenticated - so offline with an expired token (RefreshFailure, authState still SignedIn
+    // via the cached/persisted user) made every currentUser() caller behave as if signed out.
+    @Volatile
+    private var lastKnownAuthState: AuthState = AuthState.Loading
+
     override val authState = authDataSource.sessionStatus.map { status ->
         // A real session state always wins over the cache: refreshes it on sign-in, and clears it
         // on an actual sign-out so a later account on the same device never sees a stale user.
@@ -52,7 +62,7 @@ class AuthRepositoryImpl @Inject constructor(
         } else {
             null
         }
-        AuthStateMapper.map(status, lastKnownUser)
+        AuthStateMapper.map(status, lastKnownUser).also { lastKnownAuthState = it }
     }
         // This flow is collected from RootViewModel's stateIn, i.e. on Main. loadSessionOrNull()
         // below does a DataStore read and, on first use, synchronous Android Keystore/Tink work
@@ -74,7 +84,10 @@ class AuthRepositoryImpl @Inject constructor(
         null
     }
 
-    override fun currentUser(): AuthUser? = authDataSource.currentUserOrNull()?.toDomain()
+    // Consistent with authState: an actual SDK session wins, but a RefreshFailure that authState
+    // is still reporting as SignedIn (cached/persisted user) must not look "signed out" here too.
+    override fun currentUser(): AuthUser? =
+        authDataSource.currentUserOrNull()?.toDomain() ?: (lastKnownAuthState as? AuthState.SignedIn)?.user
 
     override suspend fun signInWithGoogleIdToken(idToken: String, rawNonce: String): AppResult<Unit> = safeCall {
         authDataSource.signInWithGoogleIdToken(idToken, rawNonce)

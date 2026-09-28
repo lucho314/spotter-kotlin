@@ -23,7 +23,18 @@ class FakeAuthRepository(initialState: AuthState = AuthState.Loading) : AuthRepo
     val syncProfileDisplayNameCalls = mutableListOf<AuthUser>()
     var signOutCallCount = 0
 
-    override fun currentUser(): AuthUser? = (state.value as? AuthState.SignedIn)?.user
+    /**
+     * By default [currentUser] derives from [state], mirroring the production fix
+     * (`AuthRepositoryImpl.currentUser()` never diverges from `authState`). Set this to
+     * `true`/non-null to reproduce the historical bug - `authState` reporting `SignedIn` (e.g. via
+     * a `RefreshFailure`'s cached user) while `currentUser()` still returned `null` - for tests that
+     * need to exercise a caller's defensive handling of that divergence.
+     */
+    var currentUserOverrideEnabled = false
+    var currentUserOverride: AuthUser? = null
+
+    override fun currentUser(): AuthUser? =
+        if (currentUserOverrideEnabled) currentUserOverride else (state.value as? AuthState.SignedIn)?.user
 
     override suspend fun signInWithGoogleIdToken(idToken: String, rawNonce: String): AppResult<Unit> {
         signInWithIdTokenCalls += idToken to rawNonce

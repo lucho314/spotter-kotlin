@@ -20,6 +20,7 @@ class FakePendingWorkoutRepository : PendingWorkoutRepository {
     val markedFailedIds = mutableListOf<String>()
     val attemptedIds = mutableListOf<String>()
     val resetIds = mutableListOf<String>()
+    val deletedRemoteSessionIds = mutableListOf<String>()
 
     fun seed(workout: PendingWorkout) {
         workouts[workout.id] = workout
@@ -37,6 +38,10 @@ class FakePendingWorkoutRepository : PendingWorkoutRepository {
         uploadedIds += workout.id
         val error = uploadErrors[workout.id]
         return if (error != null) AppResult.Failure(error) else AppResult.Success(Unit)
+    }
+
+    override suspend fun deleteRemoteSession(id: String) {
+        deletedRemoteSessionIds += id
     }
 
     override suspend fun delete(id: String) {
@@ -59,7 +64,7 @@ class FakePendingWorkoutRepository : PendingWorkoutRepository {
 
     override suspend fun recordAttempt(id: String, error: String) {
         attemptedIds += id
-        workouts[id]?.let { workouts[id] = it.copy(lastError = error) }
+        workouts[id]?.let { workouts[id] = it.copy(lastError = error, attempts = it.attempts + 1) }
         recompute()
     }
 

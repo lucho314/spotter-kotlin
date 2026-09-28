@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -109,7 +110,10 @@ fun RoutinesScreen(
     }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+        // `imePadding()`: the import-code field lives in `RoutinesHeader`, above the scrollable
+        // list - shrinking this Column keeps it (and the rest of the header) visible above the
+        // keyboard instead of the IME just covering the lower part of the screen.
+        Column(modifier = Modifier.padding(padding).fillMaxSize().imePadding()) {
             RoutinesHeader(
                 onImportCode = { code ->
                     val parsed = viewModel.parseImportCode(code)
