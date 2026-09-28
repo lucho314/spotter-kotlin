@@ -34,3 +34,6 @@ import kotlinx.serialization.Serializable
 
 // Onboarding.
 @Serializable data object OnboardingRoute
+
+// Garmin.
+@Serializable data object GarminConnectRoute

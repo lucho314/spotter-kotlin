@@ -6,6 +6,77 @@ ciclo de revisión está en `MIGRATION_PLAN.md` §10 y en `review_carryover.md`.
 
 ---
 
+## [Integración con Garmin Connect] — 2026-09-28 — IMPLEMENTADA (SIN revisión independiente, sin prueba en dispositivo/cuenta real)
+
+Sube un entrenamiento finalizado a Garmin Connect como actividad "Strength Training". Enteramente
+del lado del cliente (cero cambios en `supabase/`); best-effort en cada punto de contacto con el
+resto de la app (nunca afecta `FinishResult` ni el outbox propio de Supabase).
+
+- **Autenticación:** login SSO (email/contraseña) → ticket de servicio CAS → intercambio por un
+  token Bearer OAuth2 del servicio DI (Device Identity), con refresh token — el mismo flujo que usa
+  `python-garminconnect` (el flujo de `garth`, basado en OAuth1 + consumer key S3, dejó de
+  funcionar en 2026). Soporta MFA (email/SMS/app). Sin ninguna evasión de detección de bots: un
+  CAPTCHA, un bloqueo (403) o un límite de tasa (429) de Garmin se muestran como error tal cual. La
+  contraseña nunca se persiste; los tokens se cifran con Tink + Android Keystore en el DataStore
+  `secure_auth` (`EncryptedGarminTokenStore`, mismo esquema que `EncryptedSessionManager`), atados a
+  un `ownerUserId` (barrera real entre cuentas de Spotter).
+- **Archivo FIT propio:** `StrengthActivityFitEncoder` escribe el binario FIT a mano (`file_id`,
+  `event`, `set`, `lap`, `session`, `activity`; sport `TRAINING`/`STRENGTH_TRAINING`;
+  `manufacturer = development(255)`) en vez de usar el SDK oficial de Garmin en runtime (licencia
+  FIT Protocol restrictiva); ese SDK (`com.garmin:fit:21.217.0`) solo se agrega como
+  `testImplementation`, para probar el encoder por round-trip. `GarminActivityPlanner` arma una
+  línea de tiempo determinista de series ACTIVE/REST a partir de `completedAt` por serie (heurística
+  fija de segundos por repetición); la misma entrada siempre produce los mismos bytes FIT, lo que
+  hace confiable la detección de duplicados de Garmin (409/"Duplicate Activity" ⇒ éxito) como una
+  segunda capa de idempotencia. `GarminExerciseMapper` intenta mapear nombre+equipo del ejercicio a
+  `exercise_category`/`exercise_subtype` de Garmin; sin match, deja el campo inválido.
+- **Cola e idempotencia propias:** tabla Room nueva `garmin_upload` (`GarminUploadEntity`/
+  `GarminUploadDao`, estados `PENDING`/`UPLOADED`/`FAILED`), independiente del outbox de Supabase
+  (`pending_workout`, que se borra al sincronizar). Se agrega vía `EnqueueGarminUploadUseCase`:
+  automáticamente al finalizar un entrenamiento (`FinishWorkoutUseCase`, solo si auto-upload está
+  activo y **después** de que el outbox propio y su agenda de sync ya tuvieron éxito), o manualmente
+  con "Subir a Garmin" en el detalle de sesión. `GarminUploadWorker`/`GarminUploadScheduler` (trabajo
+  único `garmin_upload`, red requerida, backoff exponencial) suben las filas `PENDING` vía
+  `UploadPendingGarminActivitiesUseCase`, con reintentos acotados según el tipo de error
+  (transitorio/ambiguo) y freno total del lote ante `RateLimited`/`ReauthRequired`/`NotConnected`.
+- **Room v1 → v2:** solo agrega `garmin_upload`, migrado con `AutoMigration(from = 1, to = 2)` (sin
+  `Migration` manual); esquema exportado a `app/schemas/.../2.json`.
+- **UI:** sección "Garmin Connect" en `ProfileScreen` (`GarminSettingsSection`/`ViewModel`: conectar,
+  "Conectado como X", switch de subida automática, desconectar, reconectar si hace falta, contador y
+  reintento de subidas fallidas); pantalla `GarminConnectRoute`/`GarminConnectScreen` (email +
+  contraseña + MFA, con nota de que la contraseña no se guarda y un aviso de API no oficial/términos
+  de uso); acción "Subir a Garmin" en `SessionDetailScreen` (`GarminSessionUploadViewModel`, oculta
+  si Garmin no está conectado).
+- **Cierre de sesión y desconexión:** `SignOutUseCase` ahora también cancela el worker de Garmin,
+  desconecta la cuenta (best-effort) y borra Room entero (incluida `garmin_upload`, sin excepción).
+  `DisconnectGarminUseCase` (botón "Desconectar", sin cerrar sesión de Spotter) borra solo las filas
+  `PENDING`/`FAILED`, conservando las `UPLOADED` para que una reconexión no vuelva a subir lo ya
+  subido.
+- **Nuevos módulos/paquetes:** `data/garmin/` (`fit/`, `remote/`, `local/`, `mapper/`, más los tres
+  `Garmin*RepositoryImpl`, `GarminTokenManager`, `GarminCall`, `GarminModule`), `domain/calc/
+  GarminActivityPlanner`/`GarminExerciseMapper`, `domain/model/GarminModels.kt`, `domain/repository/
+  Garmin{Account,Activity,Upload}Repository`, `domain/usecase/{Connect,Disconnect,EnqueueGarminUpload,
+  RetryFailedGarminUploads,UploadPendingGarminActivities}*UseCase`, `core/work/GarminUpload{Worker,
+  Scheduler}`, `core/database/{entity/GarminUploadEntity,dao/GarminUploadDao}`, `feature/garmin/`,
+  `feature/history/detail/GarminSessionUploadViewModel`. Tipo de error propio `GarminError`/
+  `GarminResult`, deliberadamente separado de `AppError`/`AppResult` para no romper sus `when`
+  exhaustivos.
+- **Compilación y tests:** por primera vez se corrió el build real de Android en una máquina con SDK:
+  `./gradlew :app:testDebugUnitTest` → **785 `@Test`, 0 fallos** (incluye toda la app, no solo
+  Garmin); `:app:assembleDebug` y `:app:assembleRelease` terminan sin errores. `:app:lintDebug`
+  **falla** por 34 errores preexistentes **no relacionados** con este cambio
+  (`LocalContextGetResourceValueCall` en varias pantallas, `BidiSpoofing` en `TextSanitizer.kt`,
+  formato de `local.properties`) — pendiente una limpieza aparte. La migración Room v1→v2 se testea
+  reconstruyendo el esquema v1 a mano (`SpotterDatabaseMigrationTest`), porque los assets de
+  `MigrationTestHelper` no están disponibles a los tests unitarios locales; además se acortaron
+  nombres de test/DB para evitar un límite de `MAX_PATH` de Windows con los directorios sandbox de
+  Robolectric.
+- **Fuera de alcance:** cambiar el nombre de la actividad subida (requeriría `PUT activity-service`).
+- **Sin verificar:** prueba manual en un dispositivo con una cuenta Garmin real; no hubo revisión
+  independiente de este cambio (ver `docs/arquitectura.md` § "Limitaciones y riesgos conocidos").
+
+---
+
 ## [FASE 7] — 2026-09-27 — IMPLEMENTADA PARTE A (SIN revisión independiente; Parte B pendiente)
 
 Endurecimiento y release: configuración de firma opcional, ProGuard razonado, correcciones de

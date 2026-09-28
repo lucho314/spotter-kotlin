@@ -1,9 +1,10 @@
 # Componentes principales
 
-Clases e interfaces reales del código tras FASES 1-7, agrupadas por capa. Cada identificador
-listado aquí existe en `app/src/main/java/com/lucho314/spotter/` (verificado tras FASES 1-4 en
-máquina, FASES 5-7 código escrito no compilado; 473 tests de dominio, ViewModels y
-datos verificados en un arnés JVM).
+Clases e interfaces reales del código tras FASES 1-7 más la integración con Garmin Connect
+(2026-09-28), agrupadas por capa. Cada identificador listado aquí existe en
+`app/src/main/java/com/lucho314/spotter/` — verificado leyendo el código fuente, y además
+confirmado el 2026-09-28 por una corrida real de `./gradlew :app:testDebugUnitTest`
+(**785 @Test, 0 fallos**) más `assembleDebug`/`assembleRelease` en una máquina con Android SDK.
 
 ## `core/common` — tipos y utilidades compartidas
 
@@ -79,6 +80,13 @@ datos verificados en un arnés JVM).
   colisión de `user_id` falle fuerte en vez de borrar en cascada la sesión en curso.
 - **`PendingWorkoutDao`**: `observeCount`, `observeFailed`, `getPending`, `insertFull`, `delete`,
   `markFailed`, `resetToPending`, `recordAttempt` — estados `PENDING`/`FAILED`.
+- **`GarminUploadDao`** (tabla `garmin_upload`, Room v2): `getPending(userId)`, `get(workoutId)`,
+  `observeStatus(workoutId)`, `observeFailedCount(userId)`, `enqueue(entity, requeueFailed)`
+  (`@Transaction`: inserta si no existe, ignora si ya está `UPLOADED`, reintenta si está `FAILED` y
+  `requeueFailed=true`, si no completa el payload faltante), `markUploaded`, `recordAttempt`,
+  `markFailed`, `resetFailedToPending(userId)`, `deleteNotUploaded(userId)` (conserva `UPLOADED`,
+  usado por desconexión/cierre de sesión), `deleteAll()` (limpieza total de cierre de sesión). Ver
+  "Integración con Garmin Connect" más abajo.
 
 ## `core/navigation`
 
@@ -360,7 +368,14 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   `SyncPendingWorkoutsUseCase`; `Done`/`NoUser` → `success()`, `RetryLater` → `retry()`.
 - **`SyncScheduler`** / **`WorkManagerSyncScheduler`**: `schedule()` encola trabajo único
   `sync_workouts` (`APPEND_OR_REPLACE`, red requerida, backoff exponencial 30 s); `cancel()`.
-- Bindings en `NotificationsModule` y `WorkModule`.
+- **`GarminUploadWorker`** (`@HiltWorker`, `CoroutineWorker`, Garmin): corre
+  `UploadPendingGarminActivitiesUseCase`; `RetryLater` → `Result.retry()`, cualquier otro resultado
+  → `Result.success()` (nunca falla duro: los reintentos/estado los administra el use case sobre la
+  tabla `garmin_upload`).
+- **`GarminUploadScheduler`** / **`WorkManagerGarminUploadScheduler`** (Garmin): `schedule()` encola
+  trabajo único `garmin_upload` (`APPEND_OR_REPLACE`, red requerida, backoff exponencial 60 s);
+  `cancel()`.
+- Bindings en `NotificationsModule`, `WorkModule` y `GarminModule`.
 
 ## `feature/dashboard` (FASE 5)
 
@@ -470,4 +485,157 @@ Cada `*RepositoryImpl` implementa su interfaz homónima de `domain/repository` (
   + KDoc explícito del bug de OkHttp 10 s.
 - **`Dtos.kt`** (actualizado): DTOs nuevos `SharedRoutineImportDto`, `SharedRoutineBodyDto`,
   `SharedRoutineDayDto`, `SharedRoutineExerciseDto`.
+
+## Integración con Garmin Connect (2026-09-28)
+
+Ver `arquitectura.md` para los flujos completos (diagramas de secuencia) y las decisiones de
+diseño; acá solo las clases/interfaces y sus contratos.
+
+### `domain/model/GarminModels.kt`
+
+- **`GarminError`** (`sealed interface`, deliberadamente separado de `AppError`): `Network`,
+  `InvalidCredentials`, `InvalidMfaCode`, `MfaSessionExpired`, `CaptchaRequired`, `Blocked`,
+  `RateLimited`, `ReauthRequired`, `NotConnected`, `InvalidFile(httpStatus)`, `Server(httpStatus?)`,
+  `ServiceChanged(code)`, `Unknown(cause?)`. Nunca se construye a partir del cuerpo de una
+  respuesta, una URL, un ticket CAS, un token, un email o una contraseña.
+- **`GarminResult<T>`** (`sealed interface`): `Success<T>(value)` / `Failure(error: GarminError)` —
+  mismo patrón que `AppResult`, tipo separado.
+- **`GarminConnectionState`**: `NotConnected` / `Connected(displayName?, autoUpload, needsReconnect)`.
+- **`GarminLoginResult`**: `Connected` / `MfaRequired(challengeId, method?)` (`method`: `"email"` |
+  `"sms"` | `"totp"`/otro | `null`).
+- **`GarminUploadStatus`** (`PENDING`/`UPLOADED`/`FAILED`), **`GarminEnqueueResult`**
+  (`ENQUEUED`/`ALREADY_PENDING`/`ALREADY_UPLOADED`).
+- **`GarminActivitySnapshot`**/**`GarminSetSnapshot`**: instantánea de un entrenamiento para Garmin,
+  independiente del outbox de Supabase.
+- **`GarminExerciseRef`** (`category`, `subtype?`), **`GarminPlannedSet`**, **`GarminActivityPlan`**:
+  salida de `GarminActivityPlanner`, entrada de `StrengthActivityFitEncoder`.
+- **`GarminUploadOutcome`**: `Uploaded(activityId?, uploadId?)` / `AlreadyExists(activityId?)`.
+
+### `domain/repository`
+
+| Interfaz | Métodos clave |
+|---|---|
+| `GarminAccountRepository` | `observeConnection(userId)`, `getConnection(userId)`, `login(userId, email, password)`, `verifyMfa(userId, challengeId, code)`, `setAutoUpload(userId, enabled)`, `disconnect()` |
+| `GarminActivityRepository` | `upload(userId, plan: GarminActivityPlan): GarminResult<GarminUploadOutcome>` |
+| `GarminUploadRepository` | `enqueue(request, requeueFailed)`, `getPending(userId)`, `observeStatus(workoutId)`, `observeFailedCount(userId)`, `markUploaded`, `recordAttempt`, `markFailed`, `resetFailedToPending(userId)`, `deleteNotUploaded(userId)` |
+
+### `domain/usecase` (Garmin)
+
+- **`ConnectGarminUseCase`**: `login(userId, email, password)` / `verifyMfa(userId, challengeId,
+  code)` — delega en `GarminAccountRepository` y agenda `GarminUploadScheduler.schedule()` si el
+  login/MFA terminan en `Connected`.
+- **`DisconnectGarminUseCase`**: `invoke(userId)` — cancela `GarminUploadScheduler`, borra las filas
+  no subidas del usuario (`GarminUploadRepository.deleteNotUploaded`, las `UPLOADED` se conservan) y
+  llama `GarminAccountRepository.disconnect()`.
+- **`RetryFailedGarminUploadsUseCase`**: `invoke(userId)` — `resetFailedToPending(userId)` y, si
+  reactivó alguna fila, `GarminUploadScheduler.schedule()`.
+- **`EnqueueGarminUploadUseCase`**: dos entradas.
+  - `afterFinish(workout, pending)` (automática, llamada por `FinishWorkoutUseCase` **después** de
+    que el outbox y `SyncScheduler.schedule()` ya tuvieron éxito): nunca lanza (salvo
+    `CancellationException`) — un fallo de Garmin acá jamás puede convertir el resultado de
+    finalizar en un error.
+  - `fromHistory(userId, sessionId)` (manual, "Subir a Garmin" en el detalle): encola con
+    `requeueFailed = true`, devuelve `GarminResult<GarminEnqueueResult>`.
+- **`UploadPendingGarminActivitiesUseCase`** (corrido por `GarminUploadWorker`): `invoke():
+  GarminSyncOutcome` (`Done`/`RetryLater`/`NoUser`/`NotConnected`/`NeedsReconnect`). Por cada fila
+  `PENDING`: resuelve el snapshot (del payload guardado o, si es `null`, de
+  `WorkoutHistoryRepository.getSession`), arma el plan con `GarminActivityPlanner` +
+  `GarminExerciseMapper`, sube con `GarminActivityRepository.upload`, y clasifica cualquier error
+  entre "reintentar esta fila", "marcarla `FAILED`" o "detener todo el lote" (`RateLimited`,
+  `ReauthRequired`, `NotConnected`).
+
+### `data/garmin` — cliente de la API no oficial
+
+- **`GarminAccountRepositoryImpl`**: implementa `GarminAccountRepository`; guarda el desafío de MFA
+  pendiente en memoria (`Mutex`-protegido, TTL 10 min); `toConnectionState` compara
+  `StoredGarminTokens.ownerUserId` contra el `userId` pedido (la barrera de seguridad real entre
+  cuentas de Spotter).
+- **`GarminActivityRepositoryImpl`**: implementa `GarminActivityRepository`; codifica el plan a FIT
+  (`StrengthActivityFitEncoder`), pide un token válido (`GarminTokenManager`), sube, y si Garmin
+  responde 401 fuerza un refresh y reintenta una sola vez antes de marcar `needsReconnect`.
+- **`GarminUploadRepositoryImpl`**: implementa `GarminUploadRepository` sobre `GarminUploadDao`;
+  serializa/deserializa el snapshot como JSON (`GarminSnapshotMapper`/`GarminSnapshotJson`) en
+  `payload_json`; un payload corrupto se reporta como `GarminUploadTask.snapshotCorrupt = true` (el
+  use case lo marca `FAILED` en vez de reintentarlo indefinidamente).
+- **`GarminTokenManager`**: única fuente de un access token válido; refresca bajo un margen fijo de
+  expiración o si se fuerza, todo bajo un `Mutex` (evita refresh concurrentes); `markNeedsReconnect`.
+- **`GarminCall.kt`**: `garminCall { ... }` (mapea excepciones Ktor/IO/serialización a
+  `GarminResult`, relanza `CancellationException`, mismo rol que `core/network/SafeCall.kt` pero
+  para Garmin); `GarminApiException` (excepción interna con un `GarminError` tipado);
+  `GarminResult<T>.getOrThrowGarmin()`.
+- **`GarminModule`**: bindings Hilt (`@Binds @Singleton`) de todo lo anterior más
+  `GarminHttpClientFactory`/`OkHttpGarminHttpClientFactory`.
+
+#### `data/garmin/fit` — encoder FIT propio
+
+- **`StrengthActivityFitEncoder`**: codifica un `GarminActivityPlan` a bytes FIT (mensajes
+  `file_id`, `event`, `set`, `lap`, `session`, `activity`; sport `TRAINING`/`STRENGTH_TRAINING`;
+  `manufacturer = development(255)`). Escrito a mano en vez de usar el SDK oficial de Garmin en
+  runtime (licencia FIT Protocol restrictiva); el mismo plan siempre produce los mismos bytes.
+- **`FitWriter`**: mensajes `define`/`write` de bajo nivel, cálculo del header y el CRC final.
+- **`FitBaseType`**, **`FitTime`** (`Instant` ↔ FIT epoch), **`FitCrc`**: utilidades puras del
+  formato binario FIT.
+
+#### `data/garmin/remote`
+
+- **`GarminAuthRemoteDataSource`** / **`KtorGarminAuthRemoteDataSource`**: `login(email, password):
+  SsoStep` (`Ticket` o `Mfa(session, method)`), `verifyMfa(session, method, code): String` (ticket
+  CAS), `exchangeTicket(ticket): DiTokens` (prueba varios `client_id` candidatos), `refresh(clientId,
+  refreshToken): DiTokens`, `fetchDisplayName(accessToken): String?` (best-effort, solo lanza en
+  401/403). Todos lanzan `GarminApiException`.
+- **`GarminActivityRemoteDataSource`** / **`KtorGarminActivityRemoteDataSource`**:
+  `upload(accessToken, fileName, bytes): UploadHttpResult` (`Accepted`/`Duplicate`/`Unauthorized`);
+  un 409 o un mensaje "duplicate" en una respuesta 2xx se interpretan como `Duplicate` (éxito lógico).
+- **`GarminEndpoints`** (`internal object`): URLs/headers/client ids fijos (SSO, DI OAuth2,
+  upload-service), documenta por qué se sigue la estrategia "mobile + requests" de
+  `python-garminconnect` en vez del flujo de `garth` (roto en 2026).
+- **`GarminHttpClientFactory`** / **`OkHttpGarminHttpClientFactory`**: crea el `HttpClient` Ktor
+  sobre OkHttp, con o sin cookie jar (`withCookies`) según el paso del flujo.
+- **`GarminDtos.kt`**: DTOs `@Serializable` de las respuestas SSO/DI/upload/socialProfile.
+- **`JwtClaims.kt`**: decodifica el payload de un JWT DI (sin validar firma) para extraer `exp` y el
+  `client_id`, usados como respaldo si la respuesta no trae `expires_in`.
+
+#### `data/garmin/local` y `data/garmin/mapper`
+
+- **`GarminTokenStore`** (interfaz) / **`EncryptedGarminTokenStore`**: mismo esquema Tink + Android
+  Keystore que `EncryptedSessionManager`, en el DataStore `secure_auth` bajo su propia clave; datos
+  corruptos o indescifrables se tratan como "sin tokens" (nunca propagan la excepción).
+  `StoredGarminTokens` (`@Serializable`): `ownerUserId`, `accessToken`, `refreshToken?`, `clientId`,
+  `accessExpiresAtEpochSec`, `displayName?`, `autoUpload`, `needsReconnect`, `connectedAtEpochMs`.
+- **`GarminSnapshotMapper`**: `GarminActivitySnapshot` ↔ `GarminSnapshotJson` (para
+  `garmin_upload.payload_json`).
+
+### `feature/garmin`
+
+- **`GarminErrorMessages.kt`**: `GarminError.toMessageRes(): Int` — mapea cada variante a un string
+  en español (`R.string.garmin_error_*`).
+- **`connect/GarminConnectViewModel`** (`GarminConnectUiState`, `GarminConnectStep`
+  `Credentials`/`Mfa`, `GarminConnectEvent.Connected`): `onEmailChange`, `onPasswordChange`,
+  `onMfaCodeChange` (filtra a dígitos, máx. 10), `onSubmitCredentials()` (valida email/contraseña en
+  cliente antes de llamar a `ConnectGarminUseCase.login`), `onSubmitMfa()`, `onBackToCredentials()`;
+  `onCleared()` borra la contraseña del estado. La contraseña se conserva en el estado solo tras un
+  error de credenciales inválidas (para no reescribirla), se limpia ante cualquier otro resultado.
+- **`connect/GarminConnectScreen`**: dos pasos (credenciales / código MFA con mensaje según
+  `method`), texto `garmin_password_note` (aclara que la contraseña no se guarda) y
+  `garmin_disclaimer` (aviso de integración no oficial / posibles cambios de Garmin / términos de
+  uso), sin guard `dropUnlessResumed` en la navegación de salida (la dispara
+  `GarminConnectEvent.Connected`, un evento, no un click).
+- **`settings/GarminSettingsViewModel`** (`GarminSettingsUiState`): combina
+  `GarminAccountRepository.observeConnection`, `GarminUploadRepository.observeFailedCount` y el
+  estado de un diálogo de confirmación de desconexión; `onAutoUploadChange`, `onDisconnectClick`,
+  `onDisconnectDismiss`, `onDisconnectConfirmed` (invoca `DisconnectGarminUseCase`),
+  `onRetryFailed` (invoca `RetryFailedGarminUploadsUseCase`).
+- **`settings/GarminSettingsSection`** (composable, usado en `ProfileScreen`): botón "Conectar" si
+  `NotConnected`; si `Connected`, nombre (o "Conectado"), switch de subida automática, botón
+  "Desconectar", o (si `needsReconnect`) un aviso y botón "Reconectar"; contador de subidas fallidas
+  con botón "Reintentar" (`<plurals>` `garmin_failed_uploads`); `ConfirmDialog` de desconexión.
+
+### `feature/history/detail`
+
+- **`GarminSessionUploadViewModel`** (Garmin; ViewModel separado de `SessionDetailViewModel` para no
+  tocar esa pantalla/tests existentes): `GarminSessionAction` (`HIDDEN`/`AVAILABLE`/`PENDING`/
+  `UPLOADED`) combina la conexión y el estado de subida de esa sesión; `onUploadClick()` invoca
+  `EnqueueGarminUploadUseCase.fromHistory` y emite un `GarminSessionUploadEvent.Message` (snackbar).
+  Integrado en `SessionDetailScreen` como una acción "Subir a Garmin" (ícono nube), oculta si el
+  usuario no tiene Garmin conectado.
 

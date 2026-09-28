@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.lucho314.spotter.BuildConfig
 import com.lucho314.spotter.core.database.dao.ActiveWorkoutDao
 import com.lucho314.spotter.core.database.dao.CachedPayloadDao
+import com.lucho314.spotter.core.database.dao.GarminUploadDao
 import com.lucho314.spotter.core.database.dao.PendingWorkoutDao
 import dagger.Module
 import dagger.Provides
@@ -24,9 +25,9 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext context: Context): SpotterDatabase {
         val builder = Room.databaseBuilder(context, SpotterDatabase::class.java, DATABASE_NAME)
         if (BuildConfig.DEBUG) {
-            // Debug-only: no v2 schema exists yet, so there is nothing to migrate explicitly. In
-            // release this must never silently drop a user's local data - real migrations are
-            // required from v2 onward.
+            // Debug-only: v2 exists and migrates via AutoMigration(1, 2); this destructive fallback
+            // only protects against a debug build being newer than what's actually migrated (e.g.
+            // local schema experiments). Release always relies on the real migration path.
             builder.fallbackToDestructiveMigration(dropAllTables = true)
         }
         return builder.build()
@@ -40,4 +41,7 @@ object DatabaseModule {
 
     @Provides
     fun providePendingWorkoutDao(database: SpotterDatabase): PendingWorkoutDao = database.pendingWorkoutDao()
+
+    @Provides
+    fun provideGarminUploadDao(database: SpotterDatabase): GarminUploadDao = database.garminUploadDao()
 }

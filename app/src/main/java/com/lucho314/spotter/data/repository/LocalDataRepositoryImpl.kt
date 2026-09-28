@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.lucho314.spotter.core.database.SpotterDatabase
 import com.lucho314.spotter.core.database.dao.ActiveWorkoutDao
 import com.lucho314.spotter.core.database.dao.CachedPayloadDao
+import com.lucho314.spotter.core.database.dao.GarminUploadDao
 import com.lucho314.spotter.core.database.dao.PendingWorkoutDao
 import com.lucho314.spotter.domain.repository.LocalDataRepository
 import javax.inject.Inject
@@ -16,6 +17,7 @@ class LocalDataRepositoryImpl @Inject constructor(
     private val activeWorkoutDao: ActiveWorkoutDao,
     private val pendingWorkoutDao: PendingWorkoutDao,
     private val cachedPayloadDao: CachedPayloadDao,
+    private val garminUploadDao: GarminUploadDao,
 ) : LocalDataRepository {
 
     override suspend fun clearAll() {
@@ -27,6 +29,7 @@ class LocalDataRepositoryImpl @Inject constructor(
             pendingWorkoutDao.deleteAllSets()
             pendingWorkoutDao.deleteAll()
             cachedPayloadDao.deleteAll()
+            garminUploadDao.deleteAll()
         }
     }
 }

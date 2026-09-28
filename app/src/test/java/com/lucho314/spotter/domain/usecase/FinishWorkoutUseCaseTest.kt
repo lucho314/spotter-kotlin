@@ -6,9 +6,14 @@ import com.lucho314.spotter.domain.model.ActiveExercise
 import com.lucho314.spotter.domain.model.ActiveSet
 import com.lucho314.spotter.domain.model.ActiveWorkout
 import com.lucho314.spotter.domain.model.Equipment
+import com.lucho314.spotter.domain.model.GarminConnectionState
 import com.lucho314.spotter.domain.model.RestTimer
 import com.lucho314.spotter.domain.model.WeightUnit
 import com.lucho314.spotter.testutil.FakeActiveWorkoutRepository
+import com.lucho314.spotter.testutil.FakeGarminAccountRepository
+import com.lucho314.spotter.testutil.FakeGarminUploadRepository
+import com.lucho314.spotter.testutil.FakeGarminUploadScheduler
+import com.lucho314.spotter.testutil.FakeLogger
 import com.lucho314.spotter.testutil.FakeRestTimerAlarmScheduler
 import com.lucho314.spotter.testutil.FakeSyncScheduler
 import com.lucho314.spotter.testutil.FakeTimeProvider
@@ -24,7 +29,11 @@ class FinishWorkoutUseCaseTest {
     private val syncScheduler = FakeSyncScheduler()
     private val alarmScheduler = FakeRestTimerAlarmScheduler()
     private val timeProvider = FakeTimeProvider(instant = Instant.ofEpochSecond(5000))
-    private val useCase = FinishWorkoutUseCase(activeWorkoutRepository, syncScheduler, alarmScheduler, timeProvider)
+    private val garminAccountRepository = FakeGarminAccountRepository()
+    private val garminUploadRepository = FakeGarminUploadRepository()
+    private val garminUploadScheduler = FakeGarminUploadScheduler()
+    private val enqueueGarminUpload = EnqueueGarminUploadUseCase(garminAccountRepository, garminUploadRepository, garminUploadScheduler, FakeLogger())
+    private val useCase = FinishWorkoutUseCase(activeWorkoutRepository, syncScheduler, alarmScheduler, timeProvider, enqueueGarminUpload)
 
     private fun set(id: String, weightText: String, repsText: String, completedAt: Instant?, isWarmup: Boolean = false) =
         ActiveSet(id = id, setNumber = 1, weightText = weightText, repsText = repsText, isWarmup = isWarmup, completedAt = completedAt)
@@ -113,5 +122,35 @@ class FinishWorkoutUseCaseTest {
 
         assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
         assertThat(alarmScheduler.cancelCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `with Garmin connected and auto-upload on, the workout is enqueued after the outbox write`() = runTest {
+        garminAccountRepository.connection.value = GarminConnectionState.Connected(
+            displayName = "Ada", autoUpload = true, needsReconnect = false,
+        )
+        val workout = workout(WeightUnit.KG, listOf(set("set-1", "80", "10", Instant.ofEpochSecond(10))))
+        activeWorkoutRepository.start(workout)
+
+        val result = useCase(USER_ID, "session-1")
+
+        assertThat(result).isEqualTo(AppResult.Success(FinishResult.Saved))
+        assertThat(activeWorkoutRepository.movedToOutbox).hasSize(1)
+        assertThat(garminUploadRepository.rows).containsKey("session-1")
+        assertThat(garminUploadScheduler.scheduleCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a Garmin enqueue failure never turns FinishResult into a Failure, and the outbox write still happened`() = runTest {
+        garminAccountRepository.connection.value = GarminConnectionState.Connected(displayName = "Ada", autoUpload = true, needsReconnect = false)
+        garminUploadRepository.enqueueError = RuntimeException("garmin boom")
+        val workout = workout(WeightUnit.KG, listOf(set("set-1", "80", "10", Instant.ofEpochSecond(10))))
+        activeWorkoutRepository.start(workout)
+
+        val result = useCase(USER_ID, "session-1")
+
+        assertThat(result).isEqualTo(AppResult.Success(FinishResult.Saved))
+        assertThat(syncScheduler.scheduleCallCount).isEqualTo(1)
+        assertThat(activeWorkoutRepository.movedToOutbox).hasSize(1)
     }
 }

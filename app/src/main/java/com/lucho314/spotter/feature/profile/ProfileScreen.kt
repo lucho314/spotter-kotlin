@@ -68,10 +68,11 @@ import com.lucho314.spotter.domain.model.WeightUnit
 import com.lucho314.spotter.domain.usecase.SignOutRisk
 import com.lucho314.spotter.feature.common.ObserveAsEvents
 import com.lucho314.spotter.feature.common.SpotterDateFormats
+import com.lucho314.spotter.feature.garmin.settings.GarminSettingsSection
 import kotlinx.coroutines.launch
 
 @Composable
-fun ProfileScreen(viewModel: ProfileViewModel = hiltViewModel()) {
+fun ProfileScreen(onConnectGarminClick: () -> Unit, viewModel: ProfileViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -105,6 +106,7 @@ fun ProfileScreen(viewModel: ProfileViewModel = hiltViewModel()) {
                 onSignOutClick = viewModel::onSignOutClick,
                 onSignOutDismiss = viewModel::onSignOutDismiss,
                 onSignOutConfirmed = viewModel::onSignOutConfirmed,
+                onConnectGarminClick = onConnectGarminClick,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -124,6 +126,7 @@ private fun ProfileContent(
     onSignOutClick: () -> Unit,
     onSignOutDismiss: () -> Unit,
     onSignOutConfirmed: () -> Unit,
+    onConnectGarminClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val profile = uiState.profile
@@ -184,6 +187,8 @@ private fun ProfileContent(
                 }
             }
         }
+
+        item { GarminSettingsSection(onConnectClick = onConnectGarminClick) }
 
         item {
             SpotterButton(
