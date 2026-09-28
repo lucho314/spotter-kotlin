@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.lucho314.spotter.core.common.Logger
@@ -38,6 +39,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Explicit, not just relying on targetSdk 36 auto-enforcing it on Android 15+: this keeps
+        // the same edge-to-edge behavior (and thus the same inset-handling code paths below) on
+        // every supported API level, instead of only on the ones where the OS forces it.
+        enableEdgeToEdge()
         splashScreen.setKeepOnScreenCondition { rootViewModel.uiState.value == RootUiState.Loading }
 
         // Only process the launching intent on a genuinely fresh start: a config-change

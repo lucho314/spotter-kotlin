@@ -101,6 +101,8 @@ private fun ButtonContent(text: String, loading: Boolean) {
     if (loading) {
         CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp)
     } else {
-        Text(text = text, style = MaterialTheme.typography.labelLarge)
+        // titleMedium (not labelLarge): RN's `Button` always renders its label in `typography.titleMd`
+        // regardless of variant - matches every button in the app, e.g. "Iniciar Entrenamiento".
+        Text(text = text, style = MaterialTheme.typography.titleMedium)
     }
 }

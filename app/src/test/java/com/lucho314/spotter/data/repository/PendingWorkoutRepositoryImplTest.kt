@@ -65,4 +65,18 @@ class PendingWorkoutRepositoryImplTest {
         assertThat(remote.uploadCallOrder).containsExactly("session")
         assertThat(remote.uploadedSets).isEmpty()
     }
+
+    /**
+     * A network error is not a foreign-key violation - a single, unrecoverable-looking failure
+     * must not trigger the `routine_id = null` retry (that retry only makes sense for
+     * [isRoutineForeignKeyViolation]; see that function's own tests for the exact decision).
+     */
+    @Test
+    fun `upload does not retry with routineId=null for an unrelated error`() = runTest {
+        remote.uploadSessionError = IOException("offline")
+
+        repository.upload(workout())
+
+        assertThat(remote.uploadCallOrder).containsExactly("session") // only one attempt
+    }
 }

@@ -132,7 +132,7 @@ class WorkoutViewModelTest {
         vm.onWeightChange("set-1", "72,5")
         runCurrent()
 
-        val displayedSet = vm.uiState.value.let { it.display(it.currentExercise!!.sets.single()) }
+        val displayedSet = vm.display(vm.uiState.value.currentExercise!!.sets.single())
         assertThat(displayedSet.weightText).isEqualTo("72,5")
     }
 
@@ -151,6 +151,96 @@ class WorkoutViewModelTest {
             assertThat(awaitItem()).isEqualTo(WorkoutEvent.RestFinished)
         }
         assertThat(activeWorkoutRepository.getActive(USER.id)!!.rest).isNull()
+    }
+
+    @Test
+    fun `onShowLastSession populates a formatted date alongside the session`() = runTest(testDispatcher) {
+        activeWorkoutRepository.start(workout())
+        val vm = viewModel()
+        collectUiState(vm)
+        val lastSession = com.lucho314.spotter.domain.model.LastExerciseSession(
+            sessionId = "old-session",
+            date = Instant.parse("2026-01-15T10:00:00Z"),
+            sets = listOf(
+                com.lucho314.spotter.domain.model.WorkoutSet(
+                    id = "s1", sessionId = "old-session", exerciseId = 1, exerciseName = "Press banca",
+                    setNumber = 1, weightKg = 80.0, reps = 10, rpe = null, isWarmup = false,
+                    completedAt = Instant.parse("2026-01-15T10:00:00Z"),
+                ),
+            ),
+        )
+        workoutHistoryRepository.lastSessionResult = com.lucho314.spotter.core.common.AppResult.Success(lastSession)
+
+        vm.onShowLastSession(1)
+        runCurrent()
+
+        val state = vm.lastSessionState.value
+        assertThat(state).isInstanceOf(LastSessionUiState.Loaded::class.java)
+        val loaded = state as LastSessionUiState.Loaded
+        assertThat(loaded.session).isEqualTo(lastSession)
+        assertThat(loaded.dateText).isNotNull()
+        assertThat(loaded.dateText).isNotEmpty()
+    }
+
+    @Test
+    fun `onStop flushes an in-flight draft immediately, without waiting the debounce window`() = runTest(testDispatcher) {
+        activeWorkoutRepository.start(workout(weightText = ""))
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.onWeightChange("set-1", "72,5")
+        vm.onStop()
+        runCurrent()
+
+        assertThat(activeWorkoutRepository.getActive(USER.id)!!.exercises.single().sets.single().weightText).isEqualTo("72,5")
+    }
+
+    @Test
+    fun `onAddSet flushes an in-flight draft before copying the last set's values`() = runTest(testDispatcher) {
+        activeWorkoutRepository.start(workout(weightText = "80"))
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.onWeightChange("set-1", "90")
+        vm.onAddSet(1L) // within the 300ms debounce window: the draft isn't persisted yet
+        runCurrent()
+
+        val sets = activeWorkoutRepository.getActive(USER.id)!!.exercises.single().sets
+        assertThat(sets).hasSize(2)
+        assertThat(sets[0].weightText).isEqualTo("90") // the just-typed edit was flushed first...
+        assertThat(sets[1].weightText).isEqualTo("90") // ...so the new set copies it, not the stale "80"
+    }
+
+    @Test
+    fun `discarding emits Discarded`() = runTest(testDispatcher) {
+        activeWorkoutRepository.start(workout())
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.events.test {
+            vm.onDiscard()
+            assertThat(awaitItem()).isEqualTo(WorkoutEvent.Discarded)
+        }
+        assertThat(activeWorkoutRepository.getActive(USER.id)).isNull()
+    }
+
+    /**
+     * Review carry-over: [FinishWorkoutUseCase] reports [com.lucho314.spotter.domain.usecase.FinishResult.SessionGone]
+     * (not [com.lucho314.spotter.domain.usecase.FinishResult.NothingToSave]) when the session was
+     * already finished/discarded elsewhere - that must not surface as if *this* screen discarded it.
+     */
+    @Test
+    fun `finishing a session that vanished elsewhere emits NoActiveWorkout, not Discarded`() = runTest(testDispatcher) {
+        activeWorkoutRepository.start(workout())
+        val vm = viewModel()
+        collectUiState(vm)
+        activeWorkoutRepository.useGetActiveOverride = true
+        activeWorkoutRepository.getActiveOverride = null
+
+        vm.events.test {
+            vm.onFinish()
+            assertThat(awaitItem()).isEqualTo(WorkoutEvent.NoActiveWorkout)
+        }
     }
 
     /**

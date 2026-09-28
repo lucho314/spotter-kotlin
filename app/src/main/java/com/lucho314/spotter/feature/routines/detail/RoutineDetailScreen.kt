@@ -3,8 +3,13 @@
 package com.lucho314.spotter.feature.routines.detail
 
 import android.Manifest
+import android.app.AlarmManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -85,6 +90,9 @@ import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
+private const val EXACT_ALARM_PROMPT_PREFS = "exact_alarm_prompt"
+private const val EXACT_ALARM_PROMPT_ASKED_KEY = "asked"
+
 @Composable
 fun RoutineDetailScreen(
     onBack: () -> Unit,
@@ -125,6 +133,25 @@ fun RoutineDetailScreen(
         }
     }
 
+    // Offered once, ever, per device (not per workout start): SCHEDULE_EXACT_ALARM is a "special"
+    // permission with no runtime dialog - the only way to grant it is this Settings screen - and
+    // re-prompting on every workout would be intrusive if the user deliberately declined. Falling
+    // back to an inexact alarm is an accepted risk otherwise (migration plan section 12); never
+    // requests USE_EXACT_ALARM, which requires Play Store core-functionality justification.
+    fun requestExactAlarmPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+        if (alarmManager.canScheduleExactAlarms()) return
+        val prefs = context.getSharedPreferences(EXACT_ALARM_PROMPT_PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(EXACT_ALARM_PROMPT_ASKED_KEY, false)) return
+        prefs.edit().putBoolean(EXACT_ALARM_PROMPT_ASKED_KEY, true).apply()
+        runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")),
+            )
+        }
+    }
+
     // Lifecycle-aware: an event sent while backgrounded (e.g. `Archived`, mid network call) stays
     // buffered in the channel instead of being consumed-then-dropped - see ObserveAsEvents' KDoc.
     // `onArchived`/`onOpenWorkout` themselves are unguarded (no `dropUnlessResumed`): by the
@@ -136,6 +163,7 @@ fun RoutineDetailScreen(
             is RoutineDetailEvent.ActionFailed -> scope.launch { snackbarHostState.showSnackbar(context.getString(event.messageRes)) }
             RoutineDetailEvent.WorkoutStarted -> {
                 requestNotificationPermissionIfNeeded()
+                requestExactAlarmPermissionIfNeeded()
                 onOpenWorkout()
             }
 

@@ -5,6 +5,7 @@ import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.common.IdGenerator
 import com.lucho314.spotter.core.common.TimeProvider
 import com.lucho314.spotter.core.common.ValidationReason
+import com.lucho314.spotter.core.notifications.RestTimerAlarmScheduler
 import com.lucho314.spotter.domain.calc.RoutineOrdering
 import com.lucho314.spotter.domain.model.ActiveExercise
 import com.lucho314.spotter.domain.model.ActiveSet
@@ -52,6 +53,7 @@ class StartWorkoutUseCase @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val idGenerator: IdGenerator,
     private val timeProvider: TimeProvider,
+    private val restTimerAlarmScheduler: RestTimerAlarmScheduler,
 ) {
     suspend operator fun invoke(
         userId: String,
@@ -92,7 +94,12 @@ class StartWorkoutUseCase @Inject constructor(
             return AppResult.Success(StartResult.ActiveWorkoutExists(existing))
         }
         return when (val replaceResult = activeWorkoutRepository.replace(existingSessionId, workout)) {
-            is AppResult.Success -> AppResult.Success(StartResult.Started(workout.sessionId))
+            is AppResult.Success -> {
+                // "Descartar y empezar": the discarded session's rest alarm (if any) must not fire
+                // later for a session that no longer exists.
+                restTimerAlarmScheduler.cancel()
+                AppResult.Success(StartResult.Started(workout.sessionId))
+            }
             is AppResult.Failure -> replaceResult
         }
     }

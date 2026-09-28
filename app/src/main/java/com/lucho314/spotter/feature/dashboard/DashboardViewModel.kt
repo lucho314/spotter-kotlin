@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 data class DashboardUiState(
     val greeting: Greeting = Greeting.MORNING,
     val displayName: String? = null,
+    val avatarUrl: String? = null,
     val sessionsThisWeek: SectionState<Int> = SectionState.Loading,
     val lastSession: SectionState<LastSessionLabel> = SectionState.Loading,
     val latestPr: SectionState<PersonalRecord?> = SectionState.Loading,
@@ -108,6 +109,7 @@ class DashboardViewModel @Inject constructor(
         DashboardUiState(
             greeting = stats.greeting,
             displayName = authRepository.currentUser()?.displayName,
+            avatarUrl = authRepository.currentUser()?.avatarUrl,
             sessionsThisWeek = stats.sessionsThisWeek,
             lastSession = stats.lastSession,
             latestPr = stats.latestPr,

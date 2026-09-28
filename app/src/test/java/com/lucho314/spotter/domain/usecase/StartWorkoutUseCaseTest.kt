@@ -13,6 +13,7 @@ import com.lucho314.spotter.domain.model.UNASSIGNED_DAY_NUMBER
 import com.lucho314.spotter.testutil.FakeActiveWorkoutRepository
 import com.lucho314.spotter.testutil.FakeIdGenerator
 import com.lucho314.spotter.testutil.FakePreferencesRepository
+import com.lucho314.spotter.testutil.FakeRestTimerAlarmScheduler
 import com.lucho314.spotter.testutil.FakeRoutineRepository
 import com.lucho314.spotter.testutil.FakeTimeProvider
 import kotlinx.coroutines.test.runTest
@@ -39,8 +40,11 @@ class StartWorkoutUseCaseTest {
     private val preferencesRepository = FakePreferencesRepository()
     private val idGenerator = FakeIdGenerator()
     private val timeProvider = FakeTimeProvider()
+    private val restTimerAlarmScheduler = FakeRestTimerAlarmScheduler()
 
-    private val useCase = StartWorkoutUseCase(routineRepository, activeWorkoutRepository, preferencesRepository, idGenerator, timeProvider)
+    private val useCase = StartWorkoutUseCase(
+        routineRepository, activeWorkoutRepository, preferencesRepository, idGenerator, timeProvider, restTimerAlarmScheduler,
+    )
 
     private fun routine(days: List<RoutineDay>, exercises: List<RoutineExercise>) = RoutineDetail(
         id = ROUTINE_ID, userId = USER_ID, name = "Push Pull", description = null,
@@ -122,5 +126,17 @@ class StartWorkoutUseCaseTest {
 
         val started = (result as AppResult.Success).value as StartResult.Started
         assertThat(activeWorkoutRepository.getActive(USER_ID)?.sessionId).isEqualTo(started.sessionId)
+    }
+
+    @Test
+    fun `replaceExisting cancels the discarded session's rest alarm`() = runTest {
+        val routine = routine(days = emptyList(), exercises = listOf(routineExercise("re-1", 1, "Press banca", dayNumber = UNASSIGNED_DAY_NUMBER)))
+        routineRepository.setRoutineDetail(ROUTINE_ID, routine)
+        useCase(USER_ID, ROUTINE_ID, DaySelection.All, replaceExisting = false)
+        assertThat(restTimerAlarmScheduler.cancelCallCount).isEqualTo(0)
+
+        useCase(USER_ID, ROUTINE_ID, DaySelection.All, replaceExisting = true)
+
+        assertThat(restTimerAlarmScheduler.cancelCallCount).isEqualTo(1)
     }
 }

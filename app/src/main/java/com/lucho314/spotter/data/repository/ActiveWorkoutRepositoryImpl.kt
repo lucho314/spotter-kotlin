@@ -104,6 +104,9 @@ class ActiveWorkoutRepositoryImpl @Inject constructor(
         activeWorkoutDao.setRestTimer(sessionId, rest?.endsAt?.toEpochMilli(), rest?.totalSeconds)
     }
 
+    override suspend fun clearRestTimerIfMatches(sessionId: String, expectedEndsAt: Instant): Boolean =
+        activeWorkoutDao.clearRestTimerIfMatches(sessionId, expectedEndsAt.toEpochMilli()) > 0
+
     override suspend fun discard(sessionId: String) {
         activeWorkoutDao.deleteSession(sessionId)
     }

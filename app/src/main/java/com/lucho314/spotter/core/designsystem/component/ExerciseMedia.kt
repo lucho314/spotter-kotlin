@@ -2,6 +2,7 @@ package com.lucho314.spotter.core.designsystem.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -45,21 +46,34 @@ fun isVideoUrl(url: String): Boolean {
  * actual animated `.gif`, richer than a static [imageUrl]), falling back to [imageUrl], and
  * finally to a placeholder icon when neither is usable. If the video fails to play (bad/expired
  * URL, unsupported codec), this falls back to [imageUrl] instead of showing nothing.
+ *
+ * [showBackground] controls whether the media fills [modifier]'s bounds edge-to-edge over a
+ * [SpotterColors.SurfaceContainer] backdrop (the default, used e.g. by `ExerciseDetailScreen`) or
+ * is instead drawn at its natural aspect ratio, centered and with no visible backdrop - the RN
+ * active-workout screen's look (`WorkoutScreen`'s `ExerciseHeader`), where the exercise image sits
+ * directly on the screen background instead of a full-width gray box.
  */
 @Composable
 fun ExerciseMedia(
     mediaUrl: String?,
     imageUrl: String?,
     modifier: Modifier = Modifier,
+    showBackground: Boolean = true,
 ) {
     val videoUrl = mediaUrl?.takeIf { isVideoUrl(it) }
     val stillUrl = mediaUrl?.takeIf { !isVideoUrl(it) } ?: imageUrl
     var videoFailed by remember(videoUrl) { mutableStateOf(false) }
 
-    Box(modifier = modifier.background(SpotterColors.SurfaceContainer), contentAlignment = Alignment.Center) {
+    // Both modes keep Coil's default `ContentScale.Fit` - only the backdrop and the child's own
+    // bounds change, so `showBackground = true` callers (e.g. `ExerciseDetailScreen`) keep their
+    // exact previous look.
+    val background = if (showBackground) Modifier.background(SpotterColors.SurfaceContainer) else Modifier
+    val childModifier = if (showBackground) Modifier.fillMaxSize() else Modifier.fillMaxHeight()
+
+    Box(modifier = modifier.then(background), contentAlignment = Alignment.Center) {
         when {
-            videoUrl != null && !videoFailed -> LoopingVideo(url = videoUrl, onError = { videoFailed = true }, modifier = Modifier.fillMaxSize())
-            stillUrl != null -> AsyncImage(model = stillUrl, contentDescription = null, modifier = Modifier.fillMaxSize())
+            videoUrl != null && !videoFailed -> LoopingVideo(url = videoUrl, onError = { videoFailed = true }, modifier = childModifier)
+            stillUrl != null -> AsyncImage(model = stillUrl, contentDescription = null, modifier = childModifier)
             else -> Icon(
                 imageVector = Icons.Outlined.FitnessCenter,
                 contentDescription = null,

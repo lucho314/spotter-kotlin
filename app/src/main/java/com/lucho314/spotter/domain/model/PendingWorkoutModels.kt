@@ -14,6 +14,8 @@ data class PendingWorkout(
     val sets: List<PendingSet>,
     val status: PendingStatus,
     val lastError: String?,
+    /** Transient-failure retry count so far; used by [com.lucho314.spotter.domain.usecase.SyncPendingWorkoutsUseCase] to cap retries of ambiguous errors (`Unauthorized`/`Unknown`) before giving up. Always 0 for a freshly created row. */
+    val attempts: Int = 0,
 )
 
 data class PendingSet(

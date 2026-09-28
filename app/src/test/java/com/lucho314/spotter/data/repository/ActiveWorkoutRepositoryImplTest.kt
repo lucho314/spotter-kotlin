@@ -20,6 +20,7 @@ import com.lucho314.spotter.domain.model.ActiveWorkoutStartOutcome
 import com.lucho314.spotter.domain.model.Equipment
 import com.lucho314.spotter.domain.model.PendingWorkout
 import com.lucho314.spotter.domain.model.PendingStatus
+import com.lucho314.spotter.domain.model.RestTimer
 import com.lucho314.spotter.domain.model.WeightUnit
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -155,6 +156,36 @@ class ActiveWorkoutRepositoryImplTest {
 
         repository.discard("s1")
         assertThat(repository.observeActive("user-1").first()).isNull()
+    }
+
+    @Test
+    fun `clearRestTimerIfMatches clears it when the expected endsAt still matches`() = runTest {
+        repository.start(workout())
+        val endsAt = Instant.ofEpochMilli(5_000)
+        repository.setRestTimer("s1", RestTimer(endsAt = endsAt, totalSeconds = 90))
+
+        val cleared = repository.clearRestTimerIfMatches("s1", endsAt)
+
+        assertThat(cleared).isTrue()
+        assertThat(repository.getActive("user-1")?.rest).isNull()
+    }
+
+    /**
+     * Review carry-over 6: a stale snapshot's `endsAt` must not wipe out a *new* rest period that
+     * already started (e.g. another set was completed in the meantime, resetting the timer to a
+     * later `endsAt`).
+     */
+    @Test
+    fun `clearRestTimerIfMatches is a no-op when a newer rest period already started`() = runTest {
+        repository.start(workout())
+        val staleEndsAt = Instant.ofEpochMilli(5_000)
+        val newEndsAt = Instant.ofEpochMilli(9_000)
+        repository.setRestTimer("s1", RestTimer(endsAt = newEndsAt, totalSeconds = 90))
+
+        val cleared = repository.clearRestTimerIfMatches("s1", staleEndsAt)
+
+        assertThat(cleared).isFalse()
+        assertThat(repository.getActive("user-1")?.rest?.endsAt).isEqualTo(newEndsAt)
     }
 
     /**

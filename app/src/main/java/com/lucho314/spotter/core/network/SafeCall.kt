@@ -40,6 +40,7 @@ object ErrorMapper {
         t is IOException || t is HttpRequestException || t is HttpRequestTimeoutException -> AppError.Network
         t is UnauthorizedRestException || t is AuthRestException -> AppError.Unauthorized
         t is NotFoundRestException -> AppError.NotFound
+        isJwtUnauthorized(t) -> AppError.Unauthorized
         t is PostgrestRestException && t.code == "23505" -> AppError.Conflict(t.description ?: t.error)
         t is PostgrestRestException && t.code == "PGRST116" -> AppError.NotFound
         t is PostgrestRestException && t.code == "42501" -> AppError.Server("42501")
@@ -47,4 +48,21 @@ object ErrorMapper {
         t is SerializationException -> AppError.Server("decode")
         else -> AppError.Unknown(t)
     }
+
+    /**
+     * [UnauthorizedRestException] only ever fires for the Auth API's own 401s.
+     * PostgREST/PostgREST-fronted calls (routed through the generic [RestException]/
+     * [PostgrestRestException] path instead) report an expired/invalid JWT either as a plain HTTP
+     * 401, or via PostgREST's own `PGRST301`/`PGRST302`/`PGRST303` JWT-related error codes. Both
+     * must map to [AppError.Unauthorized] - not [AppError.Server] - so callers (e.g.
+     * `SyncPendingWorkoutsUseCase`) retry after a token refresh instead of permanently marking the
+     * row `FAILED`.
+     */
+    private fun isJwtUnauthorized(t: Throwable): Boolean =
+        t is RestException && isUnauthorizedCode(t.statusCode, (t as? PostgrestRestException)?.code)
+
+    internal fun isUnauthorizedCode(statusCode: Int, code: String?): Boolean =
+        statusCode == 401 || code in JWT_ERROR_CODES
+
+    private val JWT_ERROR_CODES = setOf("PGRST301", "PGRST302", "PGRST303")
 }

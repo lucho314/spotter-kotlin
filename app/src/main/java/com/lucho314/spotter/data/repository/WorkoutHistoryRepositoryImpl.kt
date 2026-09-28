@@ -74,7 +74,9 @@ class WorkoutHistoryRepositoryImpl @Inject constructor(
         if (latestSessionId == null) {
             null
         } else {
-            val sessionSets = sets.filter { it.sessionId == latestSessionId }
+            // The query is ordered by completed_at DESC (to find the *latest* session cheaply);
+            // within that session, sets must be shown in set_number order, not completion order.
+            val sessionSets = sets.filter { it.sessionId == latestSessionId }.sortedBy { it.setNumber }
             LastExerciseSession(sessionId = latestSessionId, date = sessionSets.minOf { it.completedAt }, sets = sessionSets)
         }
     }

@@ -20,11 +20,21 @@ class FakeActiveWorkoutRepository : ActiveWorkoutRepository {
     var startError: AppError? = null
     var replaceError: AppError? = null
 
+    /**
+     * Test-only hook to simulate a race where [getActive] no longer agrees with what
+     * [observeActive] is still emitting (e.g. the session was finished/discarded on another
+     * device between a screen reading its stale `sessionId` and acting on it). Leave `false` to
+     * keep both reads in sync, which is the fake's default behavior.
+     */
+    var useGetActiveOverride = false
+    var getActiveOverride: ActiveWorkout? = null
+
     private fun flowFor(userId: String) = flows.getOrPut(userId) { MutableStateFlow(byUser[userId]) }
 
     override fun observeActive(userId: String) = flowFor(userId)
 
-    override suspend fun getActive(userId: String): ActiveWorkout? = byUser[userId]
+    override suspend fun getActive(userId: String): ActiveWorkout? =
+        if (useGetActiveOverride) getActiveOverride else byUser[userId]
 
     override suspend fun start(workout: ActiveWorkout): AppResult<ActiveWorkoutStartOutcome> {
         startError?.let { return AppResult.Failure(it) }
@@ -78,6 +88,14 @@ class FakeActiveWorkoutRepository : ActiveWorkoutRepository {
 
     override suspend fun setRestTimer(sessionId: String, rest: RestTimer?) {
         mutate { workout -> workout.copy(rest = rest) }
+    }
+
+    override suspend fun clearRestTimerIfMatches(sessionId: String, expectedEndsAt: Instant): Boolean {
+        val entry = byUser.entries.firstOrNull { it.value.sessionId == sessionId } ?: return false
+        if (entry.value.rest?.endsAt != expectedEndsAt) return false
+        byUser[entry.key] = entry.value.copy(rest = null)
+        flowFor(entry.key).value = byUser[entry.key]
+        return true
     }
 
     override suspend fun discard(sessionId: String) {

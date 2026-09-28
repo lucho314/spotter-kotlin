@@ -1,5 +1,6 @@
 package com.lucho314.spotter.data.repository
 
+import com.lucho314.spotter.core.common.AppError
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.database.dao.PendingWorkoutDao
 import com.lucho314.spotter.core.network.safeCall
@@ -11,8 +12,20 @@ import com.lucho314.spotter.domain.model.PendingWorkout
 import com.lucho314.spotter.domain.repository.PendingWorkoutRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+
+/**
+ * A Postgres foreign-key violation (23503) on `workout_sessions.routine_id` means the routine was
+ * deleted (or, for a shared/imported one, transferred away) after this workout was completed but
+ * before it synced - the workout itself is still perfectly valid, just no longer linked to a
+ * routine. Extracted as a pure predicate (rather than inlined into a `when` over the raw
+ * exception, which would need a real `PostgrestRestException` - hard to construct in a unit test,
+ * see [com.lucho314.spotter.core.network.ErrorMapper]'s KDoc) so the decision itself is directly
+ * testable.
+ */
+internal fun isRoutineForeignKeyViolation(error: AppError): Boolean = error is AppError.Server && error.code == "23503"
 
 /** The offline outbox (ADR A3-b): [upload] is idempotent, safe to retry after a partial failure. */
 @Singleton
@@ -29,9 +42,30 @@ class PendingWorkoutRepositoryImpl @Inject constructor(
     override suspend fun getPending(userId: String): List<PendingWorkout> =
         dao.getPending(userId).map { it.toDomain() }
 
-    override suspend fun upload(workout: PendingWorkout): AppResult<Unit> = safeCall {
+    override suspend fun upload(workout: PendingWorkout): AppResult<Unit> {
+        val result = uploadOnce(workout)
+        if (result is AppResult.Failure && workout.routineId != null && isRoutineForeignKeyViolation(result.error)) {
+            // Retry once, unlinked, instead of permanently failing a perfectly real workout over a
+            // stale foreign key (observation from the FASE 4 review).
+            return uploadOnce(workout.copy(routineId = null))
+        }
+        return result
+    }
+
+    private suspend fun uploadOnce(workout: PendingWorkout): AppResult<Unit> = safeCall {
         remote.uploadSession(workout.toSessionInsertDto())
         remote.uploadSets(workout.sets.map { it.toSetInsertDto(workout.id) })
+    }
+
+    override suspend fun deleteRemoteSession(id: String) {
+        try {
+            remote.deleteSession(id)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Best-effort cleanup only: an orphan, set-less server session is a cosmetic leftover,
+            // not worth failing the sync flow (or masking the real error) over.
+        }
     }
 
     override suspend fun delete(id: String) {

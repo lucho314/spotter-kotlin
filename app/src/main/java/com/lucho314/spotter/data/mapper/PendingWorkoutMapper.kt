@@ -21,6 +21,7 @@ fun PendingWorkoutWithSets.toDomain(): PendingWorkout = PendingWorkout(
     sets = sets.sortedBy { it.setNumber }.map { it.toDomain() },
     status = PendingStatus.valueOf(workout.status),
     lastError = workout.lastError,
+    attempts = workout.attempts,
 )
 
 fun PendingWorkoutSetEntity.toDomain(): PendingSet = PendingSet(

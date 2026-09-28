@@ -29,4 +29,5 @@ fun ValidationReason.toMessageRes(): Int = when (this) {
     ValidationReason.DAYS_MAX_REACHED -> R.string.validation_days_max_reached
     ValidationReason.WORKOUT_REPS_RANGE -> R.string.validation_workout_reps_range
     ValidationReason.AGE_RANGE -> R.string.validation_age_range
+    ValidationReason.SET_INPUTS_EMPTY -> R.string.validation_set_inputs_empty
 }

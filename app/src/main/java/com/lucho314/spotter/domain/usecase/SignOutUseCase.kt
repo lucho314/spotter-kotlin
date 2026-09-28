@@ -2,7 +2,7 @@ package com.lucho314.spotter.domain.usecase
 
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.common.Logger
-import com.lucho314.spotter.core.network.safeCall
+import com.lucho314.spotter.core.common.resultOf
 import com.lucho314.spotter.core.notifications.RestTimerAlarmScheduler
 import com.lucho314.spotter.core.work.SyncScheduler
 import com.lucho314.spotter.domain.repository.ActiveWorkoutRepository
@@ -58,7 +58,7 @@ class SignOutUseCase @Inject constructor(
         restTimerAlarmScheduler.cancel()
         syncScheduler.cancel()
         return withContext(NonCancellable) {
-            when (val cleared = safeCall { localDataRepository.clearAll() }) {
+            when (val cleared = resultOf { localDataRepository.clearAll() }) {
                 is AppResult.Failure -> {
                     // Not cleared: keep the session as-is and get the sync worker running again -
                     // otherwise it would stay cancelled (step 1) until the process restarts.

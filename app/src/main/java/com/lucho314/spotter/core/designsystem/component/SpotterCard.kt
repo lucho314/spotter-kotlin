@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.Role
 import com.lucho314.spotter.core.designsystem.theme.Spacing
 import com.lucho314.spotter.core.designsystem.theme.SpotterShapes
@@ -19,11 +20,12 @@ import com.lucho314.spotter.core.designsystem.theme.SpotterShapes
 fun SpotterCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    shape: Shape = SpotterShapes.Card,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
         modifier = modifier
-            .clip(SpotterShapes.Card)
+            .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(Spacing.md),

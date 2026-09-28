@@ -29,6 +29,15 @@ interface ActiveWorkoutRepository {
     suspend fun addSet(exerciseRowId: Long, setId: String, weightText: String, repsText: String)
     suspend fun setCurrentExercise(sessionId: String, index: Int)
     suspend fun setRestTimer(sessionId: String, rest: RestTimer?)
+
+    /**
+     * Clears the rest timer only if it's still exactly [expectedEndsAt] - guards
+     * `WorkoutViewModel.maybeHandleRestFinished` against wiping out a *new* rest period that
+     * started (from completing another set) between it reading a stale snapshot and acting on it.
+     * Returns `true` if the timer was actually cleared, `false` if it had already changed.
+     */
+    suspend fun clearRestTimerIfMatches(sessionId: String, expectedEndsAt: Instant): Boolean
+
     suspend fun discard(sessionId: String)
 
     /** Moves the finished workout into the outbox and clears the active session, atomically. */
