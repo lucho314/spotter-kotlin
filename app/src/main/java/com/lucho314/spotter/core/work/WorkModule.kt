@@ -13,4 +13,8 @@ abstract class WorkModule {
     @Binds
     @Singleton
     abstract fun bindSyncScheduler(impl: WorkManagerSyncScheduler): SyncScheduler
+
+    @Binds
+    @Singleton
+    abstract fun bindGarminUploadScheduler(impl: WorkManagerGarminUploadScheduler): GarminUploadScheduler
 }

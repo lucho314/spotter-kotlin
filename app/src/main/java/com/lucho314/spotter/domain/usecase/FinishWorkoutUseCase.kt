@@ -42,6 +42,7 @@ class FinishWorkoutUseCase @Inject constructor(
     private val syncScheduler: SyncScheduler,
     private val restTimerAlarmScheduler: RestTimerAlarmScheduler,
     private val timeProvider: TimeProvider,
+    private val enqueueGarminUpload: EnqueueGarminUploadUseCase,
 ) {
     suspend operator fun invoke(userId: String, sessionId: String): AppResult<FinishResult> = resultOf {
         val workout = activeWorkoutRepository.getActive(userId)?.takeIf { it.sessionId == sessionId }
@@ -78,6 +79,10 @@ class FinishWorkoutUseCase @Inject constructor(
         activeWorkoutRepository.moveToOutbox(workout.sessionId, pendingWorkout)
         restTimerAlarmScheduler.cancel()
         syncScheduler.schedule()
+        // Garmin is entirely best-effort here, and only after the outbox write/sync schedule
+        // above already succeeded: EnqueueGarminUploadUseCase.afterFinish never throws (besides
+        // CancellationException), so it can never turn this into a Failure or change FinishResult.
+        enqueueGarminUpload.afterFinish(workout, pendingWorkout)
         FinishResult.Saved
     }
 }

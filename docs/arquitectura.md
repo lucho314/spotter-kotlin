@@ -1,8 +1,12 @@
 # Arquitectura de Spotter
 
 Estado: refleja el código tras **FASES 1-7** (FASES 1-4 aprobadas el 2026-09-26; FASES 5-7
-implementadas sin revisión independiente; FASES 5-6 sin compilación de Android; 473 tests de
-dominio/data/ViewModel verificados en arnés JVM; 571 @Test totales escritos).
+implementadas sin revisión independiente) **más la integración con Garmin Connect** (2026-09-28,
+también sin revisión independiente). El 2026-09-28 se compiló y probó por primera vez el árbol
+completo de Android en una máquina con SDK real: `./gradlew :app:testDebugUnitTest` (**785 @Test,
+0 fallos**), `:app:assembleDebug` y `:app:assembleRelease` terminan sin errores (`:app:lintDebug`
+falla por 34 errores preexistentes no relacionados; ver `README.md`). Queda pendiente la
+verificación en dispositivo/emulador real y una revisión independiente de FASES 5-7 y de Garmin.
 
 ## Visión general
 
@@ -36,15 +40,16 @@ Ver el detalle completo en [`estructura.md`](estructura.md). Resumen de responsa
 | `core/network` | Cliente Supabase, `safeCall`/`ErrorMapper`, `NetworkMonitor` |
 | `core/security` | Cifrado Tink + Android Keystore de sesión y code verifier |
 | `core/notifications` | Canal `rest_timer`, alarma de fin de descanso (`RestTimerAlarmScheduler`) y `RestTimerReceiver` |
-| `core/work` | `SyncWorkoutsWorker` + `SyncScheduler` (WorkManager) para subir el outbox |
-| `domain/model` | Modelos puros de negocio (sin Android, sin DTOs); FASE 5: `DashboardStats`, `ProfileOverview`, `ProfileEdit` |
-| `domain/repository` | Interfaces de repositorio (12) + `LocalDataRepository` (FASE 5) |
-| `domain/usecase` | `AdoptTemplateUseCase` (FASE 3); 6 use cases del entrenamiento activo y sincronización (FASE 4); 5 use cases de historial/progreso/dashboard/perfil (FASE 5): `GetDashboardStatsUseCase`, `GetExerciseProgressUseCase`, `GetProfileOverviewUseCase`, `UpdateProfileUseCase`, `SignOutUseCase` |
-| `domain/calc` | Cálculos puros testeables (peso, edad, semana, orden, etc.); FASE 5: `SetInputValidator` |
+| `core/work` | `SyncWorkoutsWorker` + `SyncScheduler` (WorkManager) para subir el outbox; `GarminUploadWorker` + `GarminUploadScheduler` para subir a Garmin Connect |
+| `domain/model` | Modelos puros de negocio (sin Android, sin DTOs); FASE 5: `DashboardStats`, `ProfileOverview`, `ProfileEdit`; Garmin: `GarminModels.kt` (`GarminError`, `GarminResult`, `GarminConnectionState`, `GarminActivitySnapshot`, `GarminActivityPlan`, etc.) |
+| `domain/repository` | Interfaces de repositorio (12) + `LocalDataRepository` (FASE 5) + `GarminAccountRepository`/`GarminActivityRepository`/`GarminUploadRepository` |
+| `domain/usecase` | `AdoptTemplateUseCase` (FASE 3); 6 use cases del entrenamiento activo y sincronización (FASE 4); 5 use cases de historial/progreso/dashboard/perfil (FASE 5): `GetDashboardStatsUseCase`, `GetExerciseProgressUseCase`, `GetProfileOverviewUseCase`, `UpdateProfileUseCase`, `SignOutUseCase`; Garmin: `ConnectGarminUseCase`, `DisconnectGarminUseCase`, `EnqueueGarminUploadUseCase`, `RetryFailedGarminUploadsUseCase`, `UploadPendingGarminActivitiesUseCase` |
+| `domain/calc` | Cálculos puros testeables (peso, edad, semana, orden, etc.); FASE 5: `SetInputValidator`; Garmin: `GarminActivityPlanner`, `GarminExerciseMapper` |
 | `data/remote` | DTOs `@Serializable` + data sources `Supabase*RemoteDataSource` |
 | `data/mapper` | DTO/Entity ↔ dominio |
 | `data/repository` | Implementaciones de las 12 interfaces de `domain/repository` |
-| `feature/*` | Pantallas Compose + ViewModel por función |
+| `data/garmin` | Cliente de la API no oficial de Garmin Connect: `fit/` (encoder FIT propio), `remote/` (SSO + DI OAuth2 + subida), `local/` (tokens cifrados), `mapper/` (snapshot ↔ JSON); repos `Garmin*RepositoryImpl` |
+| `feature/*` | Pantallas Compose + ViewModel por función; `feature/garmin/` (conectar Garmin, sección en Perfil) |
 
 ## Inyección de dependencias (Hilt + KSP)
 
@@ -53,10 +58,12 @@ prohíbe con el Kotlin integrado), solo KSP. Módulos presentes: `CommonModule`,
 `SecurityModule`, `NetworkModule`, `SupabaseModule` (cliente Supabase, `Json`, `Auth`/`Postgrest`/
 `Functions`), `DatabaseModule` (Room), `DataStoreModule` (los dos `DataStore` nombrados con
 `@Named`), `DataSourceModule` (bindings de los `*RemoteDataSource`), `RepositoryModule` (bindings
-de los 12 repositorios), `NotificationsModule` (`RestTimerAlarmScheduler`) y `WorkModule`
-(`SyncScheduler`). `SpotterApp` es `@HiltAndroidApp` y además `Configuration.Provider` (inyecta
-`HiltWorkerFactory`, que construye el `@HiltWorker` `SyncWorkoutsWorker`) y
-`SingletonImageLoader.Factory` (Coil, con decoder de GIF animado).
+de los 12 repositorios), `NotificationsModule` (`RestTimerAlarmScheduler`), `WorkModule`
+(`SyncScheduler` y `GarminUploadScheduler`) y `GarminModule` (bindings del cliente Garmin: HTTP
+factory, data sources, `GarminTokenStore`, los tres repositorios `Garmin*`). `SpotterApp` es
+`@HiltAndroidApp` y además `Configuration.Provider` (inyecta `HiltWorkerFactory`, que construye los
+`@HiltWorker` `SyncWorkoutsWorker` y `GarminUploadWorker`) y `SingletonImageLoader.Factory` (Coil,
+con decoder de GIF animado).
 
 ## Flujo de datos: cache-then-network
 
@@ -130,6 +137,173 @@ sequenceDiagram
   agenda la sincronización al iniciar sesión (no solo en la transición offline→online, bug #3 de
   RN). `WorkoutScreen` muestra un banner "Sin conexión" según `NetworkMonitor`.
 
+## Integración con Garmin Connect
+
+Sube un entrenamiento finalizado a Garmin Connect como actividad "Strength Training"
+(`Sport.TRAINING` / `SubSport.STRENGTH_TRAINING`). Es **enteramente del lado del cliente**, sin
+tocar `supabase/`, y **best-effort**: nunca puede afectar el resultado de `FinishWorkoutUseCase` ni
+la sincronización propia del outbox (`SyncWorkoutsWorker`/`sync_workouts`) — son mecanismos
+totalmente independientes, con su propia tabla Room, su propio worker y su propio tipo de error
+(`GarminError`/`GarminResult`, en `domain/model/GarminModels.kt`, deliberadamente separado de
+`AppError`/`AppResult` para no romper los `when` exhaustivos existentes).
+
+### Por qué una API no oficial
+
+Garmin no ofrece una API pública para subir actividades de terceros sin partnership. La integración
+usa la misma API HTTP no documentada que usan `garth`/`python-garminconnect` y la app oficial de
+Garmin Connect: login SSO (usuario/contraseña) → ticket de servicio CAS → intercambio por un token
+Bearer OAuth2 del servicio "DI" (Device Identity), con refresh token. El flujo de `garth` (OAuth1 +
+firma con una consumer key de S3) dejó de funcionar en 2026; `data/garmin/remote/GarminEndpoints.kt`
+documenta que esta integración sigue en cambio la estrategia "mobile + requests" de
+`python-garminconnect`: HTTP plano con cabeceras fijas de la app móvil oficial, **sin ninguna
+evasión de detección de bots**. Un CAPTCHA, un bloqueo (403) o un límite de tasa (429) del lado de
+Garmin se traducen a un error tipado y se muestran al usuario tal cual, nunca se intenta sortearlos.
+Riesgo aceptado explícitamente: Garmin puede cambiar este flujo en cualquier momento y romper la
+integración (`GarminError.ServiceChanged`).
+
+### Login y tokens
+
+```mermaid
+sequenceDiagram
+    participant UI as GarminConnectScreen/ViewModel
+    participant Use as ConnectGarminUseCase
+    participant Acc as GarminAccountRepositoryImpl
+    participant Auth as KtorGarminAuthRemoteDataSource
+    participant Store as EncryptedGarminTokenStore
+
+    UI->>Use: login(userId, email, password)
+    Use->>Acc: login(...)
+    Acc->>Auth: POST sso/mobile/api/login
+    alt MFA requerido
+        Auth-->>Acc: SsoStep.Mfa(session, method)
+        Acc-->>UI: GarminLoginResult.MfaRequired(challengeId, method)
+        UI->>Use: verifyMfa(userId, challengeId, code)
+        Use->>Acc: verifyMfa(...)
+        Acc->>Auth: POST sso/mobile/api/mfa/verifyCode (misma sesión/cookies)
+    end
+    Auth-->>Acc: CAS service ticket
+    Acc->>Auth: exchangeTicket(ticket) — DI OAuth2 (varios client_id candidatos)
+    Auth-->>Acc: DiTokens(accessToken, refreshToken, clientId, expiresAt)
+    Acc->>Auth: fetchDisplayName(accessToken) (best-effort)
+    Acc->>Store: save(StoredGarminTokens(ownerUserId=userId, ...))
+    Acc-->>UI: GarminLoginResult.Connected
+```
+
+- `GarminAccountRepositoryImpl` guarda el desafío de MFA en memoria (`pendingMfa`, con id generado
+  por `IdGenerator`, TTL de 10 minutos) — no en Room ni DataStore. La sesión con cookies
+  (`GarminSsoSession`) se cierra en cuanto se obtiene el ticket, en el fallo, o al vencer/consumirse
+  el MFA.
+- **La contraseña nunca se persiste**: solo viaja en memoria durante el login. Lo que sí se guarda,
+  cifrado, son `accessToken`/`refreshToken`/`clientId`/`accessExpiresAtEpochSec` y el `ownerUserId`
+  (`StoredGarminTokens`, en `EncryptedGarminTokenStore`, mismo esquema Tink + Android Keystore que
+  `EncryptedSessionManager` — ver "Seguridad" más abajo —, en el mismo DataStore `secure_auth` bajo
+  una clave propia).
+- **`ownerUserId` es la barrera de seguridad real** entre cuentas de Spotter: si el usuario actual no
+  coincide con el dueño de los tokens guardados, `GarminConnectionState` es `NotConnected` aunque
+  haya tokens en disco (por ejemplo, tras cambiar de cuenta de Spotter sin desconectar Garmin antes).
+- `GarminTokenManager` es el único punto que entrega un access token válido: refresca si falta menos
+  de un margen fijo para que expire (o si se lo fuerza tras un 401), todo bajo un `Mutex` para que un
+  worker en carrera con un login/reconexión nunca dispare dos refresh simultáneos contra el mismo
+  refresh token. Un refresh rechazado marca `needsReconnect = true` (no borra los tokens); un error
+  transitorio (red, 5xx, límite de tasa) los deja intactos para el próximo intento.
+
+### Construcción del archivo FIT y subida
+
+```mermaid
+sequenceDiagram
+    participant Fin as FinishWorkoutUseCase
+    participant Enq as EnqueueGarminUploadUseCase
+    participant Dao as GarminUploadDao (Room)
+    participant Sched as GarminUploadScheduler
+    participant Work as GarminUploadWorker
+    participant Use as UploadPendingGarminActivitiesUseCase
+    participant Plan as GarminActivityPlanner
+    participant Enc as StrengthActivityFitEncoder
+    participant Act as GarminActivityRepositoryImpl
+    participant API as Garmin upload-service
+
+    Fin->>Enq: afterFinish(workout, pending) — solo si outbox+sync ya se agendaron
+    Enq->>Dao: enqueue(GarminActivitySnapshot como JSON, requeueFailed=false)
+    Enq->>Sched: schedule()
+    Sched->>Work: WorkManager (red requerida, backoff exponencial)
+    Work->>Use: invoke()
+    Use->>Plan: plan(snapshot, exerciseRefs, utcOffset)
+    Plan-->>Use: GarminActivityPlan (sets ACTIVE/REST deterministas)
+    Use->>Act: upload(userId, plan)
+    Act->>Enc: encode(plan) → bytes FIT
+    Act->>API: POST upload-service/upload (multipart, Bearer)
+    API-->>Act: 202 Accepted | 409 Duplicate Activity
+    Act-->>Use: GarminUploadOutcome.Uploaded | AlreadyExists
+    Use->>Dao: markUploaded(activityId, uploadId)
+```
+
+- **Snapshot independiente del outbox**: `EnqueueGarminUploadUseCase.afterFinish` arma un
+  `GarminActivitySnapshot` propio (no depende de `pending_workout`, que se borra una vez
+  sincronizado con Supabase) y lo serializa como JSON en `garmin_upload.payload_json`. La subida
+  manual desde el historial ("Subir a Garmin") encola la fila **sin** payload (`snapshot = null`);
+  `UploadPendingGarminActivitiesUseCase` en ese caso reconstruye el snapshot leyendo
+  `WorkoutHistoryRepository.getSession(id)`.
+- **`GarminActivityPlanner`** convierte el snapshot en una línea de tiempo determinista de mensajes
+  FIT `set` (ACTIVE/REST): Spotter solo guarda `completedAt` por serie, así que la duración de cada
+  serie se estima con una heurística fija (segundos por repetición, acotada a un rango plausible).
+  La misma entrada siempre produce el mismo plan — y por lo tanto los mismos bytes FIT — lo que hace
+  confiable la propia detección de duplicados de Garmin (409 "Duplicate Activity") como una segunda
+  capa de idempotencia, además de la tabla `garmin_upload`.
+- **`GarminExerciseMapper`** intenta mapear el nombre (inglés o español) y el equipo del ejercicio de
+  Spotter a un par `exercise_category`/`exercise_subtype` de Garmin (reglas verificadas contra el FIT
+  SDK 21.217.0); si no reconoce el ejercicio, deja el campo inválido en vez de adivinar.
+- **`StrengthActivityFitEncoder`** (en `data/garmin/fit/`) escribe el binario FIT a mano
+  (`FitWriter`, `FitBaseType`, `FitCrc`, `FitTime`) — mensajes `file_id`, `event`, `set`, `lap`,
+  `session`, `activity` — en vez de usar en runtime el SDK oficial de Garmin (licencia FIT Protocol
+  restrictiva). Ese SDK (`com.garmin:fit:21.217.0`) solo se agrega como `testImplementation`, para
+  probar el encoder por round-trip (decodificar lo que Spotter genera y comparar). `MANUFACTURER` es
+  `development (255)`: el encoder no se hace pasar por ningún dispositivo Garmin real.
+- **Reautenticación con un solo reintento**: `GarminActivityRepositoryImpl.upload` pide un token
+  válido, sube, y si Garmin responde 401 fuerza un refresh y reintenta una vez; un segundo 401 marca
+  `needsReconnect = true` y devuelve `GarminError.ReauthRequired` (la UI pide reconectar).
+- **Clasificación de errores para reintentos** (`UploadPendingGarminActivitiesUseCase`): errores
+  transitorios (red, 5xx) se reintentan hasta 10 veces; errores ambiguos (`ServiceChanged`,
+  `Unknown`, y defensivamente los de login) hasta 3 veces; `RateLimited` y `ReauthRequired`/
+  `NotConnected` detienen todo el lote (no solo la fila) y reprograman o piden reconectar;
+  `InvalidFile` marca la fila `FAILED` sin reintentar.
+
+### Idempotencia, ciclo de vida y limpieza
+
+- **Tabla Room propia `garmin_upload`** (`GarminUploadEntity`/`GarminUploadDao`, ver
+  "Base de datos" más abajo), independiente de `pending_workout`: sobrevive mucho después de que el
+  outbox de Supabase para ese entrenamiento ya se haya borrado, porque es el registro de idempotencia
+  de Garmin. Estados `PENDING`/`UPLOADED`/`FAILED`; `UPLOADED` nunca se reintenta ni se re-encola
+  (un 409/"Duplicate Activity" de Garmin también se trata como éxito y marca `UPLOADED`).
+  - Desconectar Garmin (`DisconnectGarminUseCase`) o cerrar sesión (`SignOutUseCase`) borran las filas
+    `PENDING`/`FAILED` pero **conservan** las `UPLOADED` (`deleteNotUploaded`) — así una reconexión
+    posterior no vuelve a subir lo ya subido. El borrado completo de Room al cerrar sesión
+    (`LocalDataRepository.clearAll()`, `GarminUploadDao.deleteAll()`) sí incluye `UPLOADED`, porque
+    ese borrado es "esta cuenta deja el dispositivo", no una simple desconexión de Garmin.
+  - `SignOutUseCase` también cancela `GarminUploadScheduler` y llama
+    `GarminAccountRepository.disconnect()` como mejor esfuerzo (nunca bloquea el cierre de sesión: el
+    verdadero cierre de la puerta es `ownerUserId`, ver arriba).
+- **`GarminUploadWorker`** corre bajo la misma disciplina que `SyncWorkoutsWorker`: trabajo único
+  (`garmin_upload`), red requerida, backoff exponencial, `ExistingWorkPolicy.APPEND_OR_REPLACE`
+  (para no perder una fila nueva encolada mientras ya hay un run en curso).
+- **Auto-upload vs. subida manual**: `EnqueueGarminUploadUseCase.afterFinish` solo encola si
+  `GarminConnectionState.Connected.autoUpload` está activo; la opción vive en
+  `GarminSettingsSection` (Perfil) y se persiste junto a los tokens
+  (`GarminAccountRepository.setAutoUpload`). La subida manual desde el detalle de sesión
+  (`GarminSessionUploadViewModel`) funciona incluso con auto-upload apagado, y con `requeueFailed =
+  true` reintenta una fila `FAILED` sin esperar al reintento automático.
+
+### Limitaciones y riesgos conocidos
+
+- Las actividades subidas aparecen en Garmin Connect (web, app, estadísticas) pero **no** se copian
+  al historial on-device del propio reloj Garmin — Garmin no expone ese sincronizado a terceros.
+- Sin evasión de detección de bots: un cambio de Garmin en su flujo de login/MFA/subida puede romper
+  la integración sin aviso previo (mitigado por `GarminError.ServiceChanged` y reintentos acotados,
+  no por resiliencia real).
+- No se probó con una cuenta ni un dispositivo Garmin real; no hubo revisión independiente de este
+  cambio (ver `docs/changelog.md`).
+- Cambiar el nombre de la actividad (p. ej. vía `PUT activity-service`) quedó fuera de alcance: la
+  actividad sube con el nombre por defecto que Garmin le asigna a "Strength Training".
+
 ## Autenticación y sesión
 
 ```mermaid
@@ -160,10 +334,13 @@ sequenceDiagram
 (`Loading`/`ConfigError`/`SignedOut`/`SignedIn(needsOnboarding)`). `SpotterRoot` renderiza
 `LoginScreen`, `ConfigErrorScreen` o el `NavHost` autenticado según ese estado. Al pasar a
 `SignedIn` por primera vez en la sesión del proceso, sincroniza el `display_name` del perfil
-(`syncProfileDisplayName`) y agenda la sincronización del outbox. El cierre de sesión invoca `SignOutUseCase` (FASE 5), que cancela la alarma de descanso y el
-worker de sincronización, borra Room entero (entrenamiento activo + outbox + caché), llama
+(`syncProfileDisplayName`) y agenda la sincronización del outbox. El cierre de sesión invoca `SignOutUseCase` (FASE 5), que cancela la alarma de descanso, el
+worker de sincronización **y el worker de subida a Garmin**, borra Room entero (entrenamiento
+activo + outbox + caché + cola de Garmin, ver la sección "Integración con Garmin Connect"), llama
 `AuthRepository.signOut()` y borra las preferencias por usuario (conserva unidad kg/lb). Si el
-borrado de Room falla, no cierra sesión y reprograma la sincronización para reintentar.
+borrado de Room falla, no cierra sesión y reprograma la sincronización (Supabase y Garmin) para
+reintentar. La desconexión de Garmin (best-effort, tras limpiar Room y antes del `signOut()` real)
+nunca bloquea el cierre de sesión.
 
 `MainActivity` valida `AppConfig.isValid` antes de tocar el `SupabaseClient` (inyectado como
 `Lazy<SupabaseClient>` para no construirlo si la config es inválida) y muestra
@@ -230,18 +407,22 @@ a strings localizados con `AppError.toMessageRes()`/`toLoginMessageRes()`
 (`feature/common/ErrorMessages.kt`); `ValidationReason.toMessageRes()` hace lo mismo para errores de
 validación de dominio (`feature/common/ValidationMessages.kt`).
 
-## Base de datos (Room, versión 1)
+## Base de datos (Room, versión 2)
 
-Esquema exportado a `app/schemas/` (`room { schemaDirectory(...) }`). Tres grupos de entidades:
+Esquema exportado a `app/schemas/` (`room { schemaDirectory(...) }`). Cuatro grupos de entidades:
 
 | Entidad | Rol |
 |---|---|
 | `CachedPayloadEntity` | Caché de lectura JSON tipado por `(key, userId)`, usado por rutinas y catálogo de ejercicios |
 | `ActiveSessionEntity` / `ActiveExerciseEntity` / `ActiveSetEntity` | Entrenamiento en curso (fuente única de verdad mientras se entrena); `ActiveWorkoutDao` expone operaciones atómicas (`startIfAbsent`, `replaceActive`, `insertNextSet`) para evitar condiciones de carrera |
 | `PendingWorkoutEntity` / `PendingWorkoutSetEntity` | Outbox de entrenamientos finalizados pendientes de subir; `PendingWorkoutDao` tiene estados `PENDING`/`FAILED` con reintentos (`recordAttempt`, `markFailed`, `resetToPending`) |
+| `GarminUploadEntity` (tabla `garmin_upload`, v2) | Cola/registro de idempotencia de la subida a Garmin Connect, independiente del outbox de Supabase; `GarminUploadDao` con estados `PENDING`/`UPLOADED`/`FAILED` (ver "Integración con Garmin Connect") |
 
-En debug, `DatabaseModule` usa `fallbackToDestructiveMigration(dropAllTables = true)` (no hay v2
-todavía); en release nunca se aplica ese fallback — una migración real será obligatoria desde v2.
+`v1 → v2` solo agrega la tabla `garmin_upload`, así que Room la resuelve con
+`@Database(autoMigrations = [AutoMigration(from = 1, to = 2)])` sin necesitar una `Migration`
+manual (esquema v2 exportado en `app/schemas/.../2.json`). En debug, `DatabaseModule` además usa
+`fallbackToDestructiveMigration(dropAllTables = true)` como red de seguridad para experimentos
+locales de esquema; en release nunca se aplica ese fallback, solo la `AutoMigration` real.
 
 ## Seguridad
 
@@ -258,7 +439,11 @@ UserSession (JSON) --AES256-GCM(AD="spotter.session")--> Base64 --> DataStore "s
 default de supabase-kt, que persiste en SharedPreferences en texto plano);
 `EncryptedCodeVerifierCache` implementa `CodeVerifierCache` con el mismo esquema para el code
 verifier de PKCE. Ambos tratan cualquier dato corrupto o no desencriptable como "no hay sesión" en
-vez de propagar la excepción.
+vez de propagar la excepción. `EncryptedGarminTokenStore` (`data/garmin/local/`) replica el mismo
+patrón para los tokens de Garmin Connect (`StoredGarminTokens`), en el mismo `DataStore
+"secure_auth"` bajo una clave propia (`encrypted_garmin_tokens`) y un *associated data* distinto
+(`"spotter.garmin"`); también trata cualquier dato corrupto como "sin tokens" en vez de propagar la
+excepción.
 
 `TinkAeadProvider` memoiza el `Aead` a mano (no con `by lazy`, que no cachea una excepción) y
 delega la política de reintento en `KeysetRecoveryPolicy`:

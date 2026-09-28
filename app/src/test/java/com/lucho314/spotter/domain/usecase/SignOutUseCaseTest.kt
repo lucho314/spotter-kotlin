@@ -6,11 +6,15 @@ import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.domain.model.ActiveExercise
 import com.lucho314.spotter.domain.model.ActiveWorkout
 import com.lucho314.spotter.domain.model.Equipment
+import com.lucho314.spotter.domain.model.GarminConnectionState
 import com.lucho314.spotter.domain.model.PendingStatus
 import com.lucho314.spotter.domain.model.PendingWorkout
 import com.lucho314.spotter.domain.model.WeightUnit
+import com.lucho314.spotter.domain.repository.GarminAccountRepository
 import com.lucho314.spotter.testutil.FakeActiveWorkoutRepository
 import com.lucho314.spotter.testutil.FakeAuthRepository
+import com.lucho314.spotter.testutil.FakeGarminAccountRepository
+import com.lucho314.spotter.testutil.FakeGarminUploadScheduler
 import com.lucho314.spotter.testutil.FakeLocalDataRepository
 import com.lucho314.spotter.testutil.FakeLogger
 import com.lucho314.spotter.testutil.FakePendingWorkoutRepository
@@ -33,28 +37,76 @@ class SignOutUseCaseTest {
     private val restTimerAlarmScheduler = FakeRestTimerAlarmScheduler()
     private val syncScheduler = FakeSyncScheduler()
     private val logger = FakeLogger()
+    private val garminUploadScheduler = FakeGarminUploadScheduler()
+    private val garminAccountRepository = FakeGarminAccountRepository(GarminConnectionState.Connected("Ada", autoUpload = true, needsReconnect = false))
 
     private val useCase = SignOutUseCase(
         authRepository, localDataRepository, preferencesRepository, pendingWorkoutRepository,
         activeWorkoutRepository, restTimerAlarmScheduler, syncScheduler, logger,
+        garminUploadScheduler, garminAccountRepository,
     )
 
     @Test
-    fun `by the time Room is cleared, the alarm and the sync worker are already cancelled and signOut wasn't called yet`() = runTest {
+    fun `by the time Room is cleared, the alarm, the sync worker and the Garmin worker are already cancelled and signOut wasn't called yet`() = runTest {
         var alarmCancelledBeforeClear = false
         var syncCancelledBeforeClear = false
+        var garminCancelledBeforeClear = false
         var signedOutBeforeClear = false
+        var disconnectedBeforeClear = false
         localDataRepository.onClearAll = {
             alarmCancelledBeforeClear = restTimerAlarmScheduler.cancelCallCount == 1
             syncCancelledBeforeClear = syncScheduler.cancelCallCount == 1
+            garminCancelledBeforeClear = garminUploadScheduler.cancelCallCount == 1
             signedOutBeforeClear = authRepository.signOutCallCount == 0
+            disconnectedBeforeClear = garminAccountRepository.disconnectCallCount == 0
         }
 
         useCase()
 
         assertThat(alarmCancelledBeforeClear).isTrue()
         assertThat(syncCancelledBeforeClear).isTrue()
+        assertThat(garminCancelledBeforeClear).isTrue()
         assertThat(signedOutBeforeClear).isTrue()
+        assertThat(disconnectedBeforeClear).isTrue()
+        assertThat(garminAccountRepository.disconnectCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `garmin disconnect runs exactly once, and signOut still runs afterwards`() = runTest {
+        useCase()
+
+        assertThat(garminAccountRepository.disconnectCallCount).isEqualTo(1)
+        assertThat(authRepository.signOutCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `if clearAll fails, the Garmin worker is rescheduled and disconnect is not called`() = runTest {
+        localDataRepository.clearError = RuntimeException("boom")
+
+        useCase()
+
+        assertThat(garminUploadScheduler.scheduleCallCount).isEqualTo(1)
+        assertThat(garminAccountRepository.disconnectCallCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `if garmin disconnect throws, sign-out still completes`() = runTest {
+        val throwingRepository = object : GarminAccountRepository by garminAccountRepository {
+            override suspend fun disconnect() {
+                throw RuntimeException("garmin boom")
+            }
+        }
+        val useCaseWithThrowingDisconnect = SignOutUseCase(
+            authRepository, localDataRepository, preferencesRepository, pendingWorkoutRepository,
+            activeWorkoutRepository, restTimerAlarmScheduler, syncScheduler, logger,
+            garminUploadScheduler, throwingRepository,
+        )
+
+        val result = useCaseWithThrowingDisconnect()
+
+        assertThat(result).isInstanceOf(AppResult.Success::class.java)
+        assertThat(authRepository.signOutCallCount).isEqualTo(1)
+        assertThat(logger.warnings).isNotEmpty()
     }
 
     @Test

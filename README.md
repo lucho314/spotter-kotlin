@@ -37,16 +37,43 @@ Implementado hoy:
   Cálculos puros: `TextSanitizer`, `SharedRoutineSanitizer`, `ExerciseSetGrouping`,
   `WorkoutExportDataBuilder`. Fix: `socketTimeoutMillis = 120 s` en `SupabaseAiImportRemoteDataSource`
   (OkHttp cortaba a los 10 s).
-- 571 tests unitarios totales. De esos, 473 se verificaron sin Android SDK en un arnés JVM
-  ampliado (dominio, helpers puros, ViewModels, capa de datos y navegación); el resto (Room/Robolectric,
-  UI) está escrito pero sin compilar por falta de SDK.
+- **Integración con Garmin Connect:** al finalizar un entrenamiento (y también manualmente desde
+  "Subir a Garmin" en el detalle de sesión), Spotter puede subirlo a Garmin Connect como actividad
+  "Strength Training" (`Sport.TRAINING` / `SubSport.STRENGTH_TRAINING`). Login por email/contraseña
+  (con MFA) contra la API no oficial de Garmin Connect (sin evasión de detección de bots; CAPTCHA/
+  bloqueo/límite de tasa se muestran como error); la contraseña nunca se persiste, los tokens se
+  cifran con Tink en DataStore. El archivo FIT (series, repeticiones, peso, categoría de ejercicio)
+  se genera con un encoder propio, sin la licencia restrictiva del SDK oficial de Garmin en runtime.
+  Subida en segundo plano con WorkManager (`GarminUploadWorker`/`GarminUploadScheduler`), idempotente
+  vía una tabla Room propia (`garmin_upload`, un 409/"Duplicate Activity" de Garmin se trata como
+  éxito). Sección "Garmin Connect" en `ProfileScreen` (conectar/desconectar, subida automática,
+  reintentar fallidos) y pantalla `GarminConnectRoute` (credenciales + MFA + aviso de API no
+  oficial). Las actividades subidas se ven en Garmin Connect (web/app/estadísticas) pero **no** se
+  copian al historial on-device del reloj. Detalle completo en [`docs/arquitectura.md`](docs/arquitectura.md)
+  y [`docs/componentes.md`](docs/componentes.md).
+- **785 tests unitarios totales**, verificados con `./gradlew :app:testDebugUnitTest` en una
+  máquina con Android SDK real (785 @Test, 0 fallos); `assembleDebug` y `assembleRelease` también
+  compilan sin errores. El detalle histórico de qué se había verificado sin SDK en cada fase (antes
+  de esta corrida) está en [`docs/changelog.md`](docs/changelog.md).
 
 **FASE 7:** endurecimiento y release implementados en Parte A (configuración, seguridad,
   accesibilidad, 15 tests de FASES 5-6 corregidos). Verificación en dispositivo/emulador real
   (Parte B: assembleDebug, tests, lint, assembleRelease, R8) pendiente en máquina del usuario.
 
-**FASES 5-7 sin compilación del árbol Android ni verificación en dispositivo/emulador real** — ver
-sección "Compilación" más abajo.
+**Integración con Garmin Connect (2026-09-28):** implementada sin revisión independiente. Permite
+subir un entrenamiento finalizado a Garmin Connect como actividad "Strength Training". En esta
+sesión se compiló y probó por primera vez el árbol completo de Android en una máquina con SDK:
+`./gradlew :app:testDebugUnitTest` (**785 @Test, 0 fallos**), `:app:assembleDebug` y
+`:app:assembleRelease` terminan sin errores. `:app:lintDebug` sigue fallando por 34 errores
+preexistentes **no relacionados** con esta función (`LocalContextGetResourceValueCall` en varias
+pantallas, `BidiSpoofing` en `TextSanitizer.kt`, formato de `local.properties`), pendientes de una
+limpieza aparte. No se probó con un dispositivo/cuenta Garmin real ni hubo revisión independiente
+de este cambio. Detalle en [`docs/changelog.md`](docs/changelog.md),
+[`docs/arquitectura.md`](docs/arquitectura.md) y [`docs/componentes.md`](docs/componentes.md).
+
+**FASES 5-7 sin verificación en dispositivo/emulador real ni revisión independiente** — el árbol de
+Android sí compila y sus tests pasan (ver el párrafo anterior); queda pendiente la prueba manual en
+dispositivo. Ver sección "Compilación" más abajo.
 
 ## Requisitos
 
@@ -82,7 +109,7 @@ Desde el directorio del proyecto (con el JDK de Android Studio en el PATH):
 
 ```bash
 ./gradlew assembleDebug            # APK debug
-./gradlew testDebugUnitTest         # tests unitarios (571 @Test totales)
+./gradlew testDebugUnitTest         # tests unitarios (785 @Test totales)
 ./gradlew assembleRelease           # APK release con R8 (falla si faltan las claves de Supabase)
 ./gradlew assembleDebug testDebugUnitTest   # build + tests en un solo paso
 ```
@@ -128,6 +155,10 @@ cd "/e/Spoter Kotlin"
    # luego editar app/lint-baseline.xml y borrar entradas con location en app/src/
    ./gradlew :app:lintDebug
    ```
+   **Estado al 2026-09-28:** falla con 34 errores preexistentes, no relacionados con la integración
+   de Garmin (`LocalContextGetResourceValueCall` en varias pantallas, `BidiSpoofing` en
+   `TextSanitizer.kt`, formato de `local.properties`) — pendiente una limpieza aparte o el baseline
+   de arriba.
 
 5. **`./gradlew :app:assembleRelease`** (sin `keystore.properties`) → verifica R8 y lintVital.
    - Si R8 falla (*Missing class*): abrir `app/build/outputs/mapping/release/missing_rules.txt` y
@@ -150,16 +181,17 @@ cd "/e/Spoter Kotlin"
 9. **Firma real:** crear o reutilizar keystore (EAS), `./gradlew assembleRelease bundleRelease`,
    `apksigner verify --print-certs`, registrar SHA-1 en cliente OAuth Android si usa Credential Manager.
 
-**⚠️ Nota sobre FASES 5-6:** el código de las pantallas de dashboard, historial, progreso, perfil
-completo, compartir/importar rutinas y exportar entrenamientos está escrito pero **no ha sido
-compilado** porque el entorno de desarrollo donde se escribió no tiene Android SDK. Tras la FASE 7,
-473 tests (dominio, helpers puros, ViewModels, capa de datos y navegación) se verificaron en un
-arnés JVM independiente fuera del repo; las pantallas Compose, Room y los renderers Android no. Para compilar FASES 5-6 en
-producción, se requiere:
-1. Una máquina con `compileSdk 36`, `targetSdk 36`, `minSdk 26` y el JDK de Android Studio.
-2. Correr `./gradlew assembleDebug testDebugUnitTest` para verificar que los tipos, imports y
-   firmas de API de Compose/Navigation/Room son correctos.
-3. Si la compilación falla, el reporte incluye la lista de errores específicos.
+**⚠️ Nota histórica sobre FASES 5-6 (superada el 2026-09-28):** el código de las pantallas de
+dashboard, historial, progreso, perfil completo, compartir/importar rutinas y exportar
+entrenamientos se escribió sin Android SDK disponible; tras la FASE 7, solo 473 tests (dominio,
+helpers puros, ViewModels, capa de datos y navegación) se habían verificado en un arnés JVM
+independiente fuera del repo, sin compilar las pantallas Compose, Room ni los renderers Android.
+**Al implementar la integración con Garmin Connect (2026-09-28)** se corrió por primera vez el
+build real en una máquina con `compileSdk 36`/`targetSdk 36`/`minSdk 26` y el JDK de Android
+Studio: `./gradlew :app:testDebugUnitTest` (785 @Test, 0 fallos), `:app:assembleDebug` y
+`:app:assembleRelease` terminan sin errores — esto confirma que las FASES 5-7 también compilan.
+Sigue pendiente: `:app:lintDebug` (34 errores preexistentes no relacionados, ver el checklist
+arriba) y la verificación en un dispositivo/emulador real.
 
 ## Seguridad
 

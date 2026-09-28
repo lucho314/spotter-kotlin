@@ -458,4 +458,55 @@
         <item quantity="one">+%1$d ejercicio más</item>
         <item quantity="other">+%1$d ejercicios más</item>
     </plurals>
+
+    <!-- Garmin -->
+    <string name="garmin_section_title">GARMIN CONNECT</string>
+    <string name="garmin_description">Subí tus entrenamientos a Garmin Connect como actividad de Fuerza.</string>
+    <string name="garmin_connect">Conectar Garmin</string>
+    <string name="garmin_connected_as">Conectado como %1$s</string>
+    <string name="garmin_connected">Conectado</string>
+    <string name="garmin_auto_upload">Subir automáticamente</string>
+    <string name="garmin_auto_upload_hint">Al finalizar un entrenamiento se sube a Garmin cuando haya conexión.</string>
+    <string name="garmin_disconnect">Desconectar</string>
+    <string name="garmin_disconnect_confirm_title">¿Desconectar Garmin?</string>
+    <string name="garmin_disconnect_confirm_message">Spotter va a borrar el acceso a tu cuenta de Garmin de este dispositivo. Los entrenamientos ya subidos quedan en Garmin Connect.</string>
+    <string name="garmin_reconnect_needed">Garmin pidió que vuelvas a iniciar sesión.</string>
+    <string name="garmin_reconnect">Reconectar</string>
+    <plurals name="garmin_failed_uploads">
+        <item quantity="one">%d entrenamiento no se pudo subir a Garmin.</item>
+        <item quantity="other">%d entrenamientos no se pudieron subir a Garmin.</item>
+    </plurals>
+    <string name="garmin_retry_failed">Reintentar</string>
+    <string name="garmin_connect_title">Conectar Garmin</string>
+    <string name="garmin_email">Email de Garmin</string>
+    <string name="garmin_password">Contraseña de Garmin</string>
+    <string name="garmin_connect_button">Conectar</string>
+    <string name="garmin_password_note">Spotter no guarda tu contraseña: solo la usa para iniciar sesión y guarda un acceso cifrado en este dispositivo.</string>
+    <string name="garmin_disclaimer">Integración no oficial: usa una API privada de Garmin que puede dejar de funcionar o ir contra sus términos de uso.</string>
+    <string name="garmin_mfa_title">Verificación en dos pasos</string>
+    <string name="garmin_mfa_message_email">Ingresá el código que Garmin envió a tu email.</string>
+    <string name="garmin_mfa_message_sms">Ingresá el código que Garmin envió por SMS.</string>
+    <string name="garmin_mfa_message_app">Ingresá el código de tu app de autenticación.</string>
+    <string name="garmin_mfa_code">Código</string>
+    <string name="garmin_mfa_verify">Verificar</string>
+    <string name="garmin_error_email_invalid">Ingresá un email válido.</string>
+    <string name="garmin_error_password_empty">Ingresá tu contraseña.</string>
+    <string name="garmin_error_mfa_empty">Ingresá el código de verificación.</string>
+    <string name="garmin_error_invalid_credentials">Email o contraseña de Garmin incorrectos.</string>
+    <string name="garmin_error_invalid_mfa">El código no es válido. Revisalo e intentá de nuevo.</string>
+    <string name="garmin_error_mfa_expired">La verificación expiró. Volvé a ingresar tu email y contraseña.</string>
+    <string name="garmin_error_captcha">Garmin pidió un CAPTCHA que Spotter no puede resolver. Iniciá sesión en connect.garmin.com desde el navegador e intentá más tarde.</string>
+    <string name="garmin_error_blocked">Garmin bloqueó el intento de inicio de sesión. Intentá de nuevo más tarde.</string>
+    <string name="garmin_error_rate_limited">Demasiados intentos. Esperá unos minutos e intentá de nuevo.</string>
+    <string name="garmin_error_service_changed">Garmin cambió su sistema de inicio de sesión. La integración puede no funcionar hasta una actualización de Spotter.</string>
+    <string name="garmin_error_token_rejected">Garmin rechazó el acceso. Intentá conectar de nuevo.</string>
+    <string name="garmin_error_server">Garmin no responde en este momento. Intentá más tarde.</string>
+    <string name="garmin_error_not_connected">Conectá tu cuenta de Garmin desde Perfil.</string>
+    <string name="garmin_error_reauth">Garmin pidió que vuelvas a iniciar sesión desde Perfil.</string>
+    <string name="garmin_upload_action">Subir a Garmin</string>
+    <string name="garmin_upload_queued">Se va a subir a Garmin en segundo plano.</string>
+    <string name="garmin_upload_pending">La subida a Garmin ya está pendiente.</string>
+    <string name="garmin_upload_already">Este entrenamiento ya está en Garmin Connect.</string>
+    <string name="garmin_upload_already_cd">Ya está en Garmin Connect</string>
+    <string name="garmin_upload_pending_cd">Subida a Garmin pendiente</string>
 </resources>

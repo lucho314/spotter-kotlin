@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
@@ -65,8 +67,13 @@ import com.lucho314.spotter.feature.history.share.ShareWorkoutSheet
 import kotlinx.coroutines.launch
 
 @Composable
-fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = hiltViewModel()) {
+fun SessionDetailScreen(
+    onBack: () -> Unit,
+    viewModel: SessionDetailViewModel = hiltViewModel(),
+    garminViewModel: GarminSessionUploadViewModel = hiltViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val garminAction by garminViewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -84,6 +91,12 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
         }
     }
 
+    ObserveAsEvents(garminViewModel.events) { event ->
+        when (event) {
+            is GarminSessionUploadEvent.Message -> scope.launch { snackbarHostState.showSnackbar(context.getString(event.messageRes)) }
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -95,6 +108,19 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
                     }
                 },
                 actions = {
+                    if (garminAction != GarminSessionAction.HIDDEN) {
+                        IconButton(
+                            onClick = garminViewModel::onUploadClick,
+                            enabled = garminAction == GarminSessionAction.AVAILABLE,
+                        ) {
+                            val (icon, description) = when (garminAction) {
+                                GarminSessionAction.UPLOADED -> Icons.Filled.CloudDone to stringResource(R.string.garmin_upload_already_cd)
+                                GarminSessionAction.PENDING -> Icons.Filled.CloudUpload to stringResource(R.string.garmin_upload_pending_cd)
+                                else -> Icons.Filled.CloudUpload to stringResource(R.string.garmin_upload_action)
+                            }
+                            Icon(icon, contentDescription = description)
+                        }
+                    }
                     IconButton(
                         onClick = { showShareSheet = true },
                         enabled = uiState.canShare && uiState.exporting == null,

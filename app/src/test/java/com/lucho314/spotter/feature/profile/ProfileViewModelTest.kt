@@ -7,6 +7,7 @@ import com.lucho314.spotter.core.common.AppError
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.domain.model.AuthState
 import com.lucho314.spotter.domain.model.AuthUser
+import com.lucho314.spotter.domain.model.GarminConnectionState
 import com.lucho314.spotter.domain.model.PendingStatus
 import com.lucho314.spotter.domain.model.PendingWorkout
 import com.lucho314.spotter.domain.model.Profile
@@ -16,6 +17,8 @@ import com.lucho314.spotter.domain.usecase.SignOutUseCase
 import com.lucho314.spotter.domain.usecase.UpdateProfileUseCase
 import com.lucho314.spotter.testutil.FakeActiveWorkoutRepository
 import com.lucho314.spotter.testutil.FakeAuthRepository
+import com.lucho314.spotter.testutil.FakeGarminAccountRepository
+import com.lucho314.spotter.testutil.FakeGarminUploadScheduler
 import com.lucho314.spotter.testutil.FakeLocalDataRepository
 import com.lucho314.spotter.testutil.FakeLogger
 import com.lucho314.spotter.testutil.FakePendingWorkoutRepository
@@ -55,6 +58,8 @@ class ProfileViewModelTest {
     private val restTimerAlarmScheduler = FakeRestTimerAlarmScheduler()
     private val syncScheduler = FakeSyncScheduler()
     private val localDataRepository = FakeLocalDataRepository()
+    private val garminUploadScheduler = FakeGarminUploadScheduler()
+    private val garminAccountRepository = FakeGarminAccountRepository(GarminConnectionState.NotConnected)
 
     private val profile = Profile(
         id = "user-1", displayName = "Ada", avatarUrl = null, weightKg = 70.0, heightCm = 170,
@@ -68,6 +73,7 @@ class ProfileViewModelTest {
         signOutUseCase = SignOutUseCase(
             authRepository, localDataRepository, preferencesRepository, pendingWorkoutRepository,
             activeWorkoutRepository, restTimerAlarmScheduler, syncScheduler, FakeLogger(),
+            garminUploadScheduler, garminAccountRepository,
         ),
         preferencesRepository = preferencesRepository,
         timeProvider = timeProvider,

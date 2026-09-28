@@ -201,6 +201,9 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core.ktx)
     testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.ktor.client.mock)
+    // FIT SDK solo para validar en tests (round-trip); nunca en runtime (licencia FIT Protocol License).
+    testImplementation(libs.garmin.fit)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
 }

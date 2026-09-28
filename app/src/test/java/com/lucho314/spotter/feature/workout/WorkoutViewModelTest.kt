@@ -11,11 +11,16 @@ import com.lucho314.spotter.domain.model.Equipment
 import com.lucho314.spotter.domain.model.RestTimer
 import com.lucho314.spotter.domain.model.WeightUnit
 import com.lucho314.spotter.domain.usecase.DiscardWorkoutUseCase
+import com.lucho314.spotter.domain.usecase.EnqueueGarminUploadUseCase
 import com.lucho314.spotter.domain.usecase.FinishWorkoutUseCase
 import com.lucho314.spotter.domain.usecase.ToggleSetCompletionUseCase
 import com.lucho314.spotter.domain.usecase.UpdateSetInputUseCase
 import com.lucho314.spotter.testutil.FakeActiveWorkoutRepository
 import com.lucho314.spotter.testutil.FakeAuthRepository
+import com.lucho314.spotter.testutil.FakeGarminAccountRepository
+import com.lucho314.spotter.testutil.FakeGarminUploadRepository
+import com.lucho314.spotter.testutil.FakeGarminUploadScheduler
+import com.lucho314.spotter.testutil.FakeLogger
 import com.lucho314.spotter.testutil.FakeNetworkMonitor
 import com.lucho314.spotter.testutil.FakeRestTimerAlarmScheduler
 import com.lucho314.spotter.testutil.FakeSyncScheduler
@@ -67,7 +72,10 @@ class WorkoutViewModelTest {
         authRepository = authRepository,
         updateSetInputUseCase = UpdateSetInputUseCase(activeWorkoutRepository),
         toggleSetCompletionUseCase = ToggleSetCompletionUseCase(activeWorkoutRepository, restTimerAlarmScheduler, timeProvider),
-        finishWorkoutUseCase = FinishWorkoutUseCase(activeWorkoutRepository, FakeSyncScheduler(), restTimerAlarmScheduler, timeProvider),
+        finishWorkoutUseCase = FinishWorkoutUseCase(
+            activeWorkoutRepository, FakeSyncScheduler(), restTimerAlarmScheduler, timeProvider,
+            EnqueueGarminUploadUseCase(FakeGarminAccountRepository(), FakeGarminUploadRepository(), FakeGarminUploadScheduler(), FakeLogger()),
+        ),
         discardWorkoutUseCase = DiscardWorkoutUseCase(activeWorkoutRepository, restTimerAlarmScheduler),
         restTimerAlarmScheduler = restTimerAlarmScheduler,
         networkMonitor = networkMonitor,

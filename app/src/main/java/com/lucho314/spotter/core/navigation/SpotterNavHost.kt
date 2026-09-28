@@ -18,6 +18,7 @@ import com.lucho314.spotter.R
 import com.lucho314.spotter.feature.auth.OnboardingScreen
 import com.lucho314.spotter.feature.dashboard.DashboardScreen
 import com.lucho314.spotter.feature.exercise.ExerciseDetailScreen
+import com.lucho314.spotter.feature.garmin.connect.GarminConnectScreen
 import com.lucho314.spotter.feature.history.detail.SessionDetailScreen
 import com.lucho314.spotter.feature.history.list.HistoryScreen
 import com.lucho314.spotter.feature.importroutine.code.ImportCodeScreen
@@ -241,7 +242,17 @@ fun SpotterNavHost(
             SessionDetailScreen(onBack = dropUnlessResumed { navController.popBackStack() })
         }
         composable<ProgressRoute> { ProgressScreen() }
-        composable<ProfileRoute> { ProfileScreen() }
+        composable<ProfileRoute> {
+            ProfileScreen(onConnectGarminClick = dropUnlessResumed { navController.navigate(GarminConnectRoute) })
+        }
+        composable<GarminConnectRoute> {
+            GarminConnectScreen(
+                onBack = dropUnlessResumed { navController.popBackStack() },
+                // Unguarded: driven by GarminConnectEvent.Connected, not a user click - see this
+                // file's KDoc on async-operation results.
+                onConnected = { navController.popBackStack() },
+            )
+        }
         composable<WorkoutRoute> {
             WorkoutScreen(
                 // Unguarded: driven by `WorkoutEvent.Finished`/`Discarded`, not a user click - see
