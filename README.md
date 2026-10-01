@@ -200,11 +200,11 @@ arriba) y la verificación en un dispositivo/emulador real.
   `docs/arquitectura.md`).
 - `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`GOOGLE_WEB_CLIENT_ID` solo viven en `local.properties` →
   `BuildConfig`, nunca commiteados.
-- **Backend:** el 2026-09-25 se decidió explícitamente **no modificar Supabase**. Los hallazgos de
-  seguridad B1–B6 (ver `docs/MIGRATION_PLAN.md` §8) siguen abiertos en el proyecto en vivo. Existe
-  una corrección ya revisada y aprobada para B1/B2/B6 en `supabase/_proposed/` (no aplicada); ver
-  [`supabase/_proposed/README.md`](supabase/_proposed/README.md) para el detalle y cómo aplicarla
-  si se reconsidera. El cliente Kotlin funciona igual sin ella.
+- **Backend:** el 2026-09-29 se aplicaron las correcciones B1, B2 paso 1 y B6 en Supabase: la
+  importación con IA exige JWT, escribe de forma transaccional y tiene cuota; las lecturas anónimas
+  de rutinas compartidas están cerradas. B2 paso 2 espera el retiro de la app React Native anterior.
+  Ver [`supabase/_proposed/README.md`](supabase/_proposed/README.md) y
+  [`docs/query_index_review_2026-09-29.md`](docs/query_index_review_2026-09-29.md).
 
 ## Documentación
 

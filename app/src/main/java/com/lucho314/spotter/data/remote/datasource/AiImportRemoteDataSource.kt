@@ -4,9 +4,7 @@ import com.lucho314.spotter.data.remote.dto.ParseRoutineImageRequest
 import com.lucho314.spotter.data.remote.dto.ParseRoutineImageResponse
 
 /**
- * Wraps the `parse-routine-image` edge function. The client still sends `user_id` in the body for
- * compatibility with the live function (section 8, B1: it trusts that field instead of the JWT -
- * a backend issue the user decided not to fix for now).
+ * Wraps the `parse-routine-image` edge function, which obtains identity from the caller's JWT.
  *
  * **A client-side timeout does not mean the routine wasn't created**: the edge function may have
  * already committed the insert before the response reached the client. The FASE 6 import-from-image

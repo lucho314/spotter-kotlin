@@ -59,6 +59,7 @@ private fun AiImportErrorKind.messageRes(): Int = when (this) {
     AiImportErrorKind.TIMEOUT_MAYBE_CREATED -> R.string.import_image_error_timeout
     AiImportErrorKind.CONNECTION_LOST_MAYBE_CREATED -> R.string.import_image_error_connection_lost
     AiImportErrorKind.NOT_RECOGNIZED -> R.string.import_image_error_not_recognized
+    AiImportErrorKind.RATE_LIMITED -> R.string.import_image_error_rate_limited
     AiImportErrorKind.SESSION_EXPIRED -> R.string.error_unauthorized
     AiImportErrorKind.GENERIC -> R.string.import_image_error_generic
 }

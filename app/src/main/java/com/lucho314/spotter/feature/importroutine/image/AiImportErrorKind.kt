@@ -16,6 +16,7 @@ enum class AiImportErrorKind {
     TIMEOUT_MAYBE_CREATED,
     CONNECTION_LOST_MAYBE_CREATED,
     NOT_RECOGNIZED,
+    RATE_LIMITED,
     SESSION_EXPIRED,
     GENERIC,
     ;
@@ -34,6 +35,7 @@ fun AppError.toAiImportErrorKind(): AiImportErrorKind = when (this) {
     is AppError.Server -> when (code) {
         AiImportErrorCodes.TIMEOUT -> AiImportErrorKind.TIMEOUT_MAYBE_CREATED
         AiImportErrorCodes.REJECTED -> AiImportErrorKind.NOT_RECOGNIZED
+        AiImportErrorCodes.RATE_LIMITED -> AiImportErrorKind.RATE_LIMITED
         else -> AiImportErrorKind.GENERIC
     }
     AppError.NotFound, is AppError.Conflict, is AppError.Unknown -> AiImportErrorKind.GENERIC

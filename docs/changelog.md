@@ -6,6 +6,20 @@ ciclo de revisión está en `MIGRATION_PLAN.md` §10 y en `review_carryover.md`.
 
 ---
 
+## [Consultas, RLS y backend de importación] — 2026-09-29
+
+- Supabase: políticas de propietario con `(select auth.uid())`; duplicados de `profiles` eliminados;
+  lecturas anónimas de rutinas compartidas bloqueadas; comprobación de dueño y vencimiento; índice
+  parcial `(routine_id, shared_by, created_at DESC)` para shares activos.
+- `parse-routine-image` v11 exige JWT, ignora `user_id` del body, limita el uso por usuario y crea
+  rutina, días y ejercicios mediante una RPC transaccional. B2 paso 2 sigue pendiente hasta retirar
+  la app React Native anterior.
+- Room v3: la cola de Garmin usa un índice compuesto para usuario, estado y fecha. Pasaron
+  `:app:testDebugUnitTest`, `:app:assembleDebug` y 47 pruebas de la función. El cliente Kotlin
+  dejó de enviar `user_id` en la importación y reconoce el error de cuota.
+
+---
+
 ## [Integración con Garmin Connect] — 2026-09-28 — IMPLEMENTADA (SIN revisión independiente, sin prueba en dispositivo/cuenta real)
 
 Sube un entrenamiento finalizado a Garmin Connect como actividad "Strength Training". Enteramente

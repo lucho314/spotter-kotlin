@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.lucho314.spotter.core.common.AppError
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.data.remote.dto.ParseRoutineImageResponse
+import com.lucho314.spotter.data.remote.dto.ParseRoutineImageRequest
 import com.lucho314.spotter.domain.model.AiImportErrorCodes
 import com.lucho314.spotter.domain.model.AiImportedRoutine
 import com.lucho314.spotter.testutil.FakeAiImportRemoteDataSource
@@ -13,6 +14,7 @@ import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import org.junit.Before
 import org.junit.Test
 
@@ -86,11 +88,21 @@ class AiImportRepositoryImplTest {
     }
 
     @Test
-    fun `mimeType is image jpeg and userId is sent as given`() = runTest {
+    fun `request contains the image without a user id`() = runTest {
         repository.importFromImage("user-1", "base64...")
 
         val request = remote.requests.single()
         assertThat(request.mimeType).isEqualTo("image/jpeg")
-        assertThat(request.userId).isEqualTo("user-1")
+        assertThat(request.imageBase64).isEqualTo("base64...")
+        assertThat(Json.encodeToString(ParseRoutineImageRequest.serializer(), request)).doesNotContain("user_id")
+    }
+
+    @Test
+    fun `quota error code maps to RATE_LIMITED without exposing server text`() = runTest {
+        remote.response = ParseRoutineImageResponse(error = "server detail", code = "RATE_LIMITED")
+
+        val result = repository.importFromImage("user-1", "base64...")
+
+        assertThat(result).isEqualTo(AppResult.Failure(AppError.Server(AiImportErrorCodes.RATE_LIMITED)))
     }
 }

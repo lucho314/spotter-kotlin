@@ -310,7 +310,6 @@ data class SharedRoutineInsertDto(
 data class ParseRoutineImageRequest(
     @SerialName("image_base64") val imageBase64: String,
     @SerialName("image_mime_type") val mimeType: String,
-    @SerialName("user_id") val userId: String,
 )
 
 @Serializable
@@ -318,4 +317,5 @@ data class ParseRoutineImageResponse(
     @SerialName("routine_id") val routineId: String? = null,
     @SerialName("routine_name") val routineName: String? = null,
     val error: String? = null,
+    val code: String? = null,
 )

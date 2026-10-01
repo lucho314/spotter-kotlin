@@ -17,6 +17,7 @@ class AiImportErrorKindTest {
         assertThat(AppError.Validation(ValidationReason.NAME_EMPTY).toAiImportErrorKind()).isEqualTo(AiImportErrorKind.GENERIC)
         assertThat(AppError.Server(AiImportErrorCodes.TIMEOUT).toAiImportErrorKind()).isEqualTo(AiImportErrorKind.TIMEOUT_MAYBE_CREATED)
         assertThat(AppError.Server(AiImportErrorCodes.REJECTED).toAiImportErrorKind()).isEqualTo(AiImportErrorKind.NOT_RECOGNIZED)
+        assertThat(AppError.Server(AiImportErrorCodes.RATE_LIMITED).toAiImportErrorKind()).isEqualTo(AiImportErrorKind.RATE_LIMITED)
         assertThat(AppError.Server(AiImportErrorCodes.FAILED).toAiImportErrorKind()).isEqualTo(AiImportErrorKind.GENERIC)
         assertThat(AppError.Server(AiImportErrorCodes.INVALID_RESPONSE).toAiImportErrorKind()).isEqualTo(AiImportErrorKind.GENERIC)
         assertThat(AppError.NotFound.toAiImportErrorKind()).isEqualTo(AiImportErrorKind.GENERIC)

@@ -1,7 +1,7 @@
-# Supabase CLI config for this repo. Only the settings that must be versioned live here.
+# Deployment setting used for the live v11 Edge Function. Files remain here for history.
 project_id = "spotter"
 
 [functions.parse-routine-image]
-# B1 (2026-09-25): the platform must reject requests without a valid JWT.
+# B1 (deployed 2026-09-29): the platform rejects requests without a valid JWT.
 # The function additionally resolves the user with auth.getUser() and ignores body.user_id.
 verify_jwt = true

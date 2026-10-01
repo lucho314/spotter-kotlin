@@ -428,6 +428,7 @@
     <string name="import_image_error_timeout">La IA tardó demasiado. Puede que la rutina se haya creado igual: revisá tu lista antes de intentar de nuevo.</string>
     <string name="import_image_error_connection_lost">Se cortó la conexión. Puede que la rutina se haya creado igual: revisá tu lista antes de intentar de nuevo.</string>
     <string name="import_image_error_not_recognized">No pudimos reconocer una rutina en la imagen. Probá con una foto más clara.</string>
+    <string name="import_image_error_rate_limited">Alcanzaste el límite de importaciones con IA. Volvé a intentarlo más tarde.</string>
     <string name="import_image_error_generic">No pudimos importar la rutina. Intentá de nuevo.</string>
 
     <!-- Share workout -->
