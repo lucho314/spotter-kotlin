@@ -3,6 +3,7 @@
 package com.lucho314.spotter.feature.history.detail
 
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -43,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -56,11 +60,13 @@ import com.lucho314.spotter.core.designsystem.component.SpotterTextField
 import com.lucho314.spotter.core.designsystem.component.StatCard
 import com.lucho314.spotter.core.designsystem.theme.Spacing
 import com.lucho314.spotter.core.designsystem.theme.SpotterColors
+import com.lucho314.spotter.domain.calc.ExerciseNote
 import com.lucho314.spotter.domain.calc.NumberFormatter
 import com.lucho314.spotter.domain.calc.WeightConverter
 import com.lucho314.spotter.domain.calc.WorkoutMath
 import com.lucho314.spotter.domain.model.WeightUnit
 import com.lucho314.spotter.domain.model.WorkoutSet
+import com.lucho314.spotter.feature.common.ExerciseNoteText
 import com.lucho314.spotter.feature.common.ObserveAsEvents
 import com.lucho314.spotter.feature.common.launchShareFile
 import com.lucho314.spotter.feature.history.share.ShareWorkoutSheet
@@ -141,6 +147,7 @@ fun SessionDetailScreen(
                 onEditSet = viewModel::onEditSet,
                 onDeleteSetClick = { setToDelete = it },
                 onAddSet = viewModel::onAddSet,
+                onEditNote = viewModel::onEditNote,
                 modifier = Modifier.padding(padding).fillMaxSize(),
             )
         }
@@ -155,6 +162,11 @@ fun SessionDetailScreen(
             onDismiss = viewModel::onEditDismiss,
             onConfirm = viewModel::onEditConfirm,
         )
+    }
+
+    val editingNote = uiState.editingNote
+    if (editingNote != null) {
+        ExerciseNoteDialog(editing = editingNote, onDismiss = viewModel::onNoteDismiss, onConfirm = viewModel::onNoteConfirm)
     }
 
     if (showShareSheet) {
@@ -179,6 +191,7 @@ private fun SessionDetailContent(
     onEditSet: (String) -> Unit,
     onDeleteSetClick: (WorkoutSet) -> Unit,
     onAddSet: (Int) -> Unit,
+    onEditNote: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier, contentPadding = PaddingValues(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
@@ -195,9 +208,11 @@ private fun SessionDetailContent(
                 weightUnit = uiState.weightUnit,
                 savingSetIds = uiState.savingSetIds,
                 adding = block.exerciseId in uiState.addingExerciseIds,
+                savingNote = block.exerciseId in uiState.savingNoteExerciseIds,
                 onEditSet = onEditSet,
                 onDeleteSetClick = onDeleteSetClick,
                 onAddSet = { onAddSet(block.exerciseId) },
+                onEditNote = { onEditNote(block.exerciseId) },
             )
         }
     }
@@ -209,12 +224,35 @@ private fun ExerciseBlockCard(
     weightUnit: WeightUnit,
     savingSetIds: Set<String>,
     adding: Boolean,
+    savingNote: Boolean,
     onEditSet: (String) -> Unit,
     onDeleteSetClick: (WorkoutSet) -> Unit,
     onAddSet: () -> Unit,
+    onEditNote: () -> Unit,
 ) {
     SpotterCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = block.name ?: stringResource(R.string.session_detail_unknown_exercise), style = MaterialTheme.typography.titleMedium, color = SpotterColors.OnSurface)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = block.name ?: stringResource(R.string.session_detail_unknown_exercise),
+                style = MaterialTheme.typography.titleMedium,
+                color = SpotterColors.OnSurface,
+                modifier = Modifier.weight(1f),
+            )
+            if (savingNote) {
+                CircularProgressIndicator(modifier = Modifier.padding(Spacing.sm).size(20.dp))
+            } else {
+                IconButton(onClick = onEditNote) {
+                    Icon(
+                        Icons.Outlined.EditNote,
+                        contentDescription = stringResource(if (block.note != null) R.string.workout_note_edit else R.string.workout_note_add),
+                        tint = if (block.note != null) SpotterColors.PrimaryContainer else SpotterColors.Secondary,
+                    )
+                }
+            }
+        }
+        if (block.note != null) {
+            ExerciseNoteText(note = block.note, modifier = Modifier.clickable(role = Role.Button, onClick = onEditNote))
+        }
         block.sets.forEach { set -> WorkoutSetRow(set, weightUnit, saving = set.id in savingSetIds, onEditClick = { onEditSet(set.id) }, onDeleteClick = { onDeleteSetClick(set) }) }
         TextButton(onClick = onAddSet, enabled = !adding) {
             if (adding) {
@@ -294,6 +332,31 @@ private fun EditSetDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(weightText, repsText) }) { Text(stringResource(R.string.generic_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.generic_cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun ExerciseNoteDialog(editing: EditingNote, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var text by remember(editing.exerciseId) { mutableStateOf(editing.text) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(editing.exerciseName ?: stringResource(R.string.session_detail_unknown_exercise)) },
+        text = {
+            SpotterTextField(
+                value = text,
+                onValueChange = { text = ExerciseNote.clampInput(it) },
+                placeholder = stringResource(R.string.workout_note_placeholder),
+                supportingText = stringResource(R.string.workout_note_counter, text.length, ExerciseNote.MAX_LENGTH),
+                keyboardCapitalization = KeyboardCapitalization.Sentences,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text) }) { Text(stringResource(R.string.generic_save)) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.generic_cancel)) }

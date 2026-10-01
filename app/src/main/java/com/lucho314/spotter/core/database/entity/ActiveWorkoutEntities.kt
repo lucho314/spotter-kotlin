@@ -60,6 +60,7 @@ data class ActiveExerciseEntity(
     @ColumnInfo(name = "target_sets") val targetSets: Int,
     @ColumnInfo(name = "target_reps") val targetReps: Int,
     @ColumnInfo(name = "rest_seconds") val restSeconds: Int,
+    @ColumnInfo(name = "note") val note: String? = null,
 )
 
 @Entity(

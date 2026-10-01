@@ -6,6 +6,23 @@ ciclo de revisión está en `MIGRATION_PLAN.md` §10 y en `review_carryover.md`.
 
 ---
 
+## [Notas por ejercicio] — 2026-10-01
+
+- En el entrenamiento, el botón de nota (junto al de historial) abre un campo de hasta 50
+  caracteres por ejercicio. La nota guardada se ve bajo el encabezado y en la hoja "Último
+  entrenamiento" la próxima vez.
+- En el detalle de una sesión del historial, cada ejercicio muestra su nota y un botón para
+  cargarla, editarla o borrarla (texto vacío) sobre `workout_exercise_notes`. Si la lectura de notas
+  falla, la sesión se muestra igual sin ellas.
+- Room v4 (migración automática): `active_exercise.note` y la tabla de outbox
+  `pending_workout_exercise_note`. Solo se guardan notas de ejercicios con series completadas.
+- Supabase: nueva tabla `workout_exercise_notes` (`migrations/20261001120000_…`, aplicada a mano el
+  2026-10-01), con RLS por dueño de la sesión. Se sube después de las series; si falla de forma permanente (por ejemplo,
+  la tabla aún no existe) la nota se descarta sin marcar el entrenamiento como fallido. La lectura
+  también es tolerante: si falla, la hoja muestra las series sin nota.
+
+---
+
 ## [Consultas, RLS y backend de importación] — 2026-09-29
 
 - Supabase: políticas de propietario con `(select auth.uid())`; duplicados de `profiles` eliminados;

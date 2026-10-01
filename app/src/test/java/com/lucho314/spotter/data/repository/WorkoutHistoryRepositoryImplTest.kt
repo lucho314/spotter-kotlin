@@ -3,9 +3,12 @@ package com.lucho314.spotter.data.repository
 import com.google.common.truth.Truth.assertThat
 import com.lucho314.spotter.core.common.AppError
 import com.lucho314.spotter.core.common.AppResult
+import com.lucho314.spotter.data.remote.dto.WorkoutExerciseNoteRowDto
+import com.lucho314.spotter.data.remote.dto.WorkoutSessionDto
 import com.lucho314.spotter.data.remote.dto.WorkoutSetDto
 import com.lucho314.spotter.testutil.FakeIdGenerator
 import com.lucho314.spotter.testutil.FakeWorkoutRemoteDataSource
+import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -60,6 +63,51 @@ class WorkoutHistoryRepositoryImplTest {
 
         val session = (result as AppResult.Success).value
         assertThat(session?.sets?.map { it.setNumber }).containsExactly(1, 2, 3).inOrder()
+    }
+
+    @Test
+    fun `getLastSession includes that session's note for the exercise`() = runTest {
+        remote.lastSessionSets = listOf(set("session-new", setNumber = 1, completedAt = "2026-01-15T11:00:00Z"))
+        remote.exerciseNote = "me molestó el hombro"
+
+        val session = (repository.getLastSession("user-1", exerciseId = 42) as AppResult.Success).value
+
+        assertThat(session?.note).isEqualTo("me molestó el hombro")
+        assertThat(remote.getExerciseNoteCalls).containsExactly("session-new" to 42)
+    }
+
+    @Test
+    fun `getLastSession still returns the sets when the note lookup fails`() = runTest {
+        remote.lastSessionSets = listOf(set("session-new", setNumber = 1, completedAt = "2026-01-15T11:00:00Z"))
+        remote.getExerciseNoteError = IOException("offline")
+
+        val session = (repository.getLastSession("user-1", exerciseId = 42) as AppResult.Success).value
+
+        assertThat(session?.sets).hasSize(1)
+        assertThat(session?.note).isNull()
+    }
+
+    @Test
+    fun `getSession attaches the session's exercise notes, and still loads if they fail`() = runTest {
+        remote.session = WorkoutSessionDto(id = "s1", userId = "user-1", startedAt = "2026-01-15T10:00:00Z", status = "completed")
+        remote.sessionExerciseNotes = listOf(WorkoutExerciseNoteRowDto(exerciseId = 7, note = "llegué justo"))
+
+        val withNotes = (repository.getSession("s1") as AppResult.Success).value
+        assertThat(withNotes.exerciseNotes).containsExactly(7, "llegué justo")
+
+        remote.getSessionExerciseNotesError = IOException("offline")
+        val withoutNotes = (repository.getSession("s1") as AppResult.Success).value
+        assertThat(withoutNotes.exerciseNotes).isEmpty()
+    }
+
+    @Test
+    fun `setExerciseNote saves a normalized note, and deletes it when blank`() = runTest {
+        repository.setExerciseNote("s1", 7, "  me molestó el hombro ")
+        repository.setExerciseNote("s1", 8, "   ")
+
+        assertThat(remote.savedExerciseNotes.map { Triple(it.sessionId, it.exerciseId, it.note) })
+            .containsExactly(Triple("s1", 7, "me molestó el hombro"))
+        assertThat(remote.deletedExerciseNotes).containsExactly("s1" to 8)
     }
 
     @Test

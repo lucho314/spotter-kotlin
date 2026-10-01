@@ -31,6 +31,8 @@ data class ActiveExercise(
     val targetReps: Int,
     val restSeconds: Int,
     val sets: List<ActiveSet>,
+    /** Raw text as typed (may be blank); normalized with `ExerciseNote.normalize` when finishing. */
+    val note: String? = null,
 )
 
 data class ActiveSet(

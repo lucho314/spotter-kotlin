@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import com.lucho314.spotter.core.common.AppError
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.database.SpotterDatabase
+import com.lucho314.spotter.domain.model.PendingExerciseNote
 import com.lucho314.spotter.domain.model.PendingStatus
 import com.lucho314.spotter.domain.model.PendingWorkout
 import com.lucho314.spotter.testutil.FakeWorkoutRemoteDataSource
@@ -13,6 +15,7 @@ import java.io.IOException
 import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.SerializationException
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -53,6 +56,45 @@ class PendingWorkoutRepositoryImplTest {
         repository.upload(workout())
 
         assertThat(remote.uploadCallOrder).containsExactly("session", "sets").inOrder()
+    }
+
+    @Test
+    fun `upload sends exercise notes after the sets`() = runTest {
+        val result = repository.upload(workout().copy(exerciseNotes = listOf(PendingExerciseNote(exerciseId = 7, note = "llegué justo"))))
+
+        assertThat(result).isEqualTo(AppResult.Success(Unit))
+        assertThat(remote.uploadCallOrder).containsExactly("session", "sets", "notes").inOrder()
+        assertThat(remote.uploadedExerciseNotes.map { Triple(it.sessionId, it.exerciseId, it.note) })
+            .containsExactly(Triple("w1", 7, "llegué justo"))
+    }
+
+    @Test
+    fun `a network error on the notes is reported so the whole upload is retried`() = runTest {
+        remote.uploadExerciseNotesError = IOException("offline")
+
+        val result = repository.upload(workout().copy(exerciseNotes = listOf(PendingExerciseNote(exerciseId = 7, note = "x"))))
+
+        assertThat(result).isInstanceOf(AppResult.Failure::class.java)
+    }
+
+    @Test
+    fun `a permanent error on the notes drops them instead of failing an already-synced workout`() = runTest {
+        remote.uploadExerciseNotesError = SerializationException("rejected") // -> AppError.Server("decode")
+
+        val result = repository.upload(workout().copy(exerciseNotes = listOf(PendingExerciseNote(exerciseId = 7, note = "x"))))
+
+        assertThat(result).isEqualTo(AppResult.Success(Unit))
+    }
+
+    @Test
+    fun `isRetryableNoteUploadError only retries network and 5xx-or-unknown server errors`() {
+        assertThat(isRetryableNoteUploadError(AppError.Network)).isTrue()
+        assertThat(isRetryableNoteUploadError(AppError.Server(code = null))).isTrue()
+        assertThat(isRetryableNoteUploadError(AppError.Server(code = "503"))).isTrue()
+        assertThat(isRetryableNoteUploadError(AppError.Server(code = "PGRST205"))).isFalse()
+        assertThat(isRetryableNoteUploadError(AppError.Server(code = "23514"))).isFalse()
+        assertThat(isRetryableNoteUploadError(AppError.NotFound)).isFalse()
+        assertThat(isRetryableNoteUploadError(AppError.Unauthorized)).isFalse()
     }
 
     @Test

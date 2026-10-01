@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.lucho314.spotter.core.database.entity.PendingWorkoutEntity
+import com.lucho314.spotter.core.database.entity.PendingWorkoutExerciseNoteEntity
 import com.lucho314.spotter.core.database.entity.PendingWorkoutSetEntity
 import com.lucho314.spotter.core.database.entity.PendingWorkoutWithSets
 import kotlinx.coroutines.flow.Flow
@@ -33,10 +34,18 @@ interface PendingWorkoutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSets(sets: List<PendingWorkoutSetEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExerciseNotes(notes: List<PendingWorkoutExerciseNoteEntity>)
+
     @Transaction
-    suspend fun insertFull(workout: PendingWorkoutEntity, sets: List<PendingWorkoutSetEntity>) {
+    suspend fun insertFull(
+        workout: PendingWorkoutEntity,
+        sets: List<PendingWorkoutSetEntity>,
+        exerciseNotes: List<PendingWorkoutExerciseNoteEntity> = emptyList(),
+    ) {
         insertWorkout(workout)
         insertSets(sets)
+        insertExerciseNotes(exerciseNotes)
     }
 
     @Query("DELETE FROM pending_workout WHERE id = :id")
@@ -54,6 +63,9 @@ interface PendingWorkoutDao {
     /** Sign-out cleanup ([com.lucho314.spotter.domain.repository.LocalDataRepository]): sets before the parent row, explicit rather than relying on the FK cascade pragma. */
     @Query("DELETE FROM pending_workout_set")
     suspend fun deleteAllSets()
+
+    @Query("DELETE FROM pending_workout_exercise_note")
+    suspend fun deleteAllExerciseNotes()
 
     @Query("DELETE FROM pending_workout")
     suspend fun deleteAll()

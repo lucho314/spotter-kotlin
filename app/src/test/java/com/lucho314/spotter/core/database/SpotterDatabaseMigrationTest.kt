@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
  * wires schema JSON into *androidTest* assets, not local ("test") unit test assets (see
  * `copyRoomSchemasToAndroidTestAssetsDebugAndroidTest` vs. the absence of an equivalent unit-test
  * task). These tests build v1/v2 databases from the exported schemas' SQL via a raw
- * [SupportSQLiteOpenHelper], then open them with the real [SpotterDatabase] (v3). Both automatic
+ * [SupportSQLiteOpenHelper], then open them with the real [SpotterDatabase] (v4). All automatic
  * migrations are registered on the `@Database` annotation, so no extra wiring is needed.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -102,6 +102,30 @@ class SpotterDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `v3 to v4 adds exercise note storage`() = runTest {
+        createLegacyDatabase(3)
+
+        val database = Room.databaseBuilder(context, SpotterDatabase::class.java, dbName).build()
+        try {
+            assertThat(database.pendingWorkoutDao().getPending("user-1").single().exerciseNotes).isEmpty()
+
+            val columns = database.openHelper.readableDatabase.query("PRAGMA table_info('active_exercise')")
+            val names = mutableListOf<String>()
+            while (columns.moveToNext()) names += columns.getString(columns.getColumnIndexOrThrow("name"))
+            columns.close()
+            assertThat(names).contains("note")
+
+            val table = database.openHelper.readableDatabase.query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='pending_workout_exercise_note'",
+            )
+            assertThat(table.count).isEqualTo(1)
+            table.close()
+        } finally {
+            database.close()
+        }
+    }
+
     private fun createV1Database() {
         createLegacyDatabase(1)
     }
@@ -118,8 +142,9 @@ class SpotterDatabaseMigrationTest {
                 object : SupportSQLiteOpenHelper.Callback(version) {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         V1_SCHEMA_SQL.forEach(db::execSQL)
-                        if (version == 2) {
-                            V2_EXTRA_SCHEMA_SQL.forEach(db::execSQL)
+                        when (version) {
+                            2 -> V2_EXTRA_SCHEMA_SQL.forEach(db::execSQL)
+                            3 -> V3_EXTRA_SCHEMA_SQL.forEach(db::execSQL)
                         }
                     }
 
@@ -132,7 +157,7 @@ class SpotterDatabaseMigrationTest {
             "INSERT INTO pending_workout (id, user_id, routine_id, started_at, completed_at, notes, status, attempts, last_error, created_at_epoch_ms) " +
                 "VALUES ('pw-1', 'user-1', NULL, '2026-01-15T10:00:00Z', '2026-01-15T11:00:00Z', NULL, 'PENDING', 0, NULL, 1000)",
         )
-        if (version == 2) {
+        if (version >= 2) {
             helper.writableDatabase.execSQL(
                 "INSERT INTO garmin_upload (workout_id, user_id, status, attempts, last_error, garmin_activity_id, garmin_upload_id, payload_json, created_at_epoch_ms, updated_at_epoch_ms) " +
                     "VALUES ('garmin-1', 'user-1', 'PENDING', 0, NULL, NULL, NULL, '{}', 1000, 1000)",
@@ -162,6 +187,13 @@ class SpotterDatabaseMigrationTest {
             "CREATE TABLE IF NOT EXISTS `garmin_upload` (`workout_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `status` TEXT NOT NULL, `attempts` INTEGER NOT NULL, `last_error` TEXT, `garmin_activity_id` INTEGER, `garmin_upload_id` INTEGER, `payload_json` TEXT, `created_at_epoch_ms` INTEGER NOT NULL, `updated_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`workout_id`))",
             "CREATE INDEX IF NOT EXISTS `index_garmin_upload_user_id` ON `garmin_upload` (`user_id`)",
             "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8995cda9cfaf6939c3ab3aaae530b2ff')",
+        )
+
+        /** From `app/schemas/.../3.json`: v2's table with the composite lookup index instead. */
+        val V3_EXTRA_SCHEMA_SQL = listOf(
+            "CREATE TABLE IF NOT EXISTS `garmin_upload` (`workout_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `status` TEXT NOT NULL, `attempts` INTEGER NOT NULL, `last_error` TEXT, `garmin_activity_id` INTEGER, `garmin_upload_id` INTEGER, `payload_json` TEXT, `created_at_epoch_ms` INTEGER NOT NULL, `updated_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`workout_id`))",
+            "CREATE INDEX IF NOT EXISTS `index_garmin_upload_user_id_status_created_at_epoch_ms` ON `garmin_upload` (`user_id`, `status`, `created_at_epoch_ms`)",
+            "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd07fbd0f8098f0f4b8ae4b0a0b3f12da')",
         )
     }
 }

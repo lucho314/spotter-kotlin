@@ -191,6 +191,41 @@ class WorkoutViewModelTest {
     }
 
     @Test
+    fun `a note shows immediately, is capped at 50 chars and persisted after the debounce`() = runTest(testDispatcher) {
+        activeWorkoutRepository.start(workout())
+        val vm = viewModel()
+        collectUiState(vm)
+        val exercise = vm.uiState.value.currentExercise!!
+
+        vm.onNoteChange(exercise.rowId, "a".repeat(60))
+        assertThat(vm.noteText(exercise)).hasLength(50)
+        runCurrent()
+        assertThat(activeWorkoutRepository.getActive(USER.id)!!.exercises.single().note).isNull()
+
+        advanceTimeBy(350)
+        runCurrent()
+        assertThat(activeWorkoutRepository.getActive(USER.id)!!.exercises.single().note).isEqualTo("a".repeat(50))
+    }
+
+    @Test
+    fun `finishing right after typing a note still saves it`() = runTest(testDispatcher) {
+        activeWorkoutRepository.start(
+            workout().let { w ->
+                w.copy(exercises = w.exercises.map { e -> e.copy(sets = e.sets.map { it.copy(completedAt = Instant.EPOCH) }) })
+            },
+        )
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.onNoteChange(1L, " llegué justo ")
+        vm.onFinish()
+        runCurrent()
+
+        val notes = activeWorkoutRepository.movedToOutbox.single().exerciseNotes
+        assertThat(notes.map { it.exerciseId to it.note }).containsExactly(1 to "llegué justo")
+    }
+
+    @Test
     fun `onStop flushes an in-flight draft immediately, without waiting the debounce window`() = runTest(testDispatcher) {
         activeWorkoutRepository.start(workout(weightText = ""))
         val vm = viewModel()

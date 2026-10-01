@@ -30,10 +30,14 @@ data class WorkoutSessionDetail(
     val completedAt: Instant?,
     val notes: String?,
     val sets: List<WorkoutSet>,
+    /** Per-exercise notes of this session, keyed by exercise id. */
+    val exerciseNotes: Map<Int, String> = emptyMap(),
 )
 
 data class LastExerciseSession(
     val sessionId: String,
     val date: Instant,
     val sets: List<WorkoutSet>,
+    /** The note written for this exercise in that session, if any. */
+    val note: String? = null,
 )

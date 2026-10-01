@@ -300,6 +300,24 @@ data class WorkoutSetInsertDto(
 )
 
 @Serializable
+data class WorkoutExerciseNoteInsertDto(
+    @SerialName("session_id") val sessionId: String,
+    @SerialName("exercise_id") val exerciseId: Int,
+    val note: String,
+)
+
+@Serializable
+data class WorkoutExerciseNoteDto(
+    val note: String,
+)
+
+@Serializable
+data class WorkoutExerciseNoteRowDto(
+    @SerialName("exercise_id") val exerciseId: Int,
+    val note: String,
+)
+
+@Serializable
 data class SharedRoutineInsertDto(
     @SerialName("routine_id") val routineId: String,
     @SerialName("shared_by") val sharedBy: String,

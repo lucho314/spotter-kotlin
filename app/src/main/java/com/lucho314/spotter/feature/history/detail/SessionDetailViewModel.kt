@@ -8,6 +8,7 @@ import com.lucho314.spotter.R
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.common.TimeProvider
 import com.lucho314.spotter.core.navigation.RouteArgs
+import com.lucho314.spotter.domain.calc.ExerciseNote
 import com.lucho314.spotter.domain.calc.ExerciseSetGrouping
 import com.lucho314.spotter.domain.calc.SetInputValidation
 import com.lucho314.spotter.domain.calc.SetInputValidator
@@ -35,7 +36,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class ExerciseBlock(val exerciseId: Int, val name: String?, val sets: List<WorkoutSet>)
+data class ExerciseBlock(val exerciseId: Int, val name: String?, val sets: List<WorkoutSet>, val note: String? = null)
+
+data class EditingNote(val exerciseId: Int, val exerciseName: String?, val text: String)
 
 data class EditingSet(val setId: String, val setNumber: Int, val exerciseName: String?, val weightText: String, val repsText: String)
 
@@ -53,6 +56,8 @@ data class SessionDetailUiState(
     val addingExerciseIds: Set<Int> = emptySet(),
     val editing: EditingSet? = null,
     @StringRes val editErrorRes: Int? = null,
+    val editingNote: EditingNote? = null,
+    val savingNoteExerciseIds: Set<Int> = emptySet(),
     /** Non-null while [SessionDetailViewModel.onExport] is rendering that format. */
     val exporting: ExportFormat? = null,
 ) {
@@ -89,6 +94,8 @@ class SessionDetailViewModel @Inject constructor(
     private val editing = MutableStateFlow<EditingSet?>(null)
     private val editErrorRes = MutableStateFlow<Int?>(null)
     private val exporting = MutableStateFlow<ExportFormat?>(null)
+    private val editingNote = MutableStateFlow<EditingNote?>(null)
+    private val savingNoteExerciseIds = MutableStateFlow<Set<Int>>(emptySet())
 
     private val eventChannel = Channel<SessionDetailEvent>(Channel.BUFFERED)
     val events: Flow<SessionDetailEvent> = eventChannel.receiveAsFlow()
@@ -102,10 +109,16 @@ class SessionDetailViewModel @Inject constructor(
         val addingExerciseIds: Set<Int>,
     )
 
-    private data class EditState(val editing: EditingSet?, val editErrorRes: Int?, val exporting: ExportFormat?)
+    private data class EditState(
+        val editing: EditingSet?,
+        val editErrorRes: Int?,
+        val exporting: ExportFormat?,
+        val editingNote: EditingNote?,
+        val savingNoteExerciseIds: Set<Int>,
+    )
 
     private val core = combine(detail, loading, loadErrorRes, savingSetIds, addingExerciseIds, ::Core)
-    private val editState = combine(editing, editErrorRes, exporting, ::EditState)
+    private val editState = combine(editing, editErrorRes, exporting, editingNote, savingNoteExerciseIds, ::EditState)
 
     val uiState: StateFlow<SessionDetailUiState> = combine(core, editState, preferencesRepository.weightUnit) { c, e, unit ->
         val d = c.detail
@@ -117,13 +130,15 @@ class SessionDetailViewModel @Inject constructor(
             durationMinutes = d?.let { WorkoutMath.durationMinutes(it.startedAt, it.completedAt) },
             volumeKg = d?.sets?.let { WorkoutMath.volumeKg(it) } ?: 0.0,
             workingSetCount = d?.sets?.count { !it.isWarmup } ?: 0,
-            blocks = d?.let { buildBlocks(it.sets) } ?: emptyList(),
+            blocks = d?.let { buildBlocks(it) } ?: emptyList(),
             weightUnit = unit,
             savingSetIds = c.savingSetIds,
             addingExerciseIds = c.addingExerciseIds,
             editing = e.editing,
             editErrorRes = e.editErrorRes,
             exporting = e.exporting,
+            editingNote = e.editingNote,
+            savingNoteExerciseIds = e.savingNoteExerciseIds,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SessionDetailUiState())
 
@@ -160,8 +175,42 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
-    private fun buildBlocks(sets: List<WorkoutSet>): List<ExerciseBlock> =
-        ExerciseSetGrouping.group(sets).map { ExerciseBlock(it.exerciseId, it.exerciseName, it.sets) }
+    private fun buildBlocks(detail: WorkoutSessionDetail): List<ExerciseBlock> =
+        ExerciseSetGrouping.group(detail.sets).map { ExerciseBlock(it.exerciseId, it.exerciseName, it.sets, detail.exerciseNotes[it.exerciseId]) }
+
+    fun onEditNote(exerciseId: Int) {
+        val d = detail.value ?: return
+        val sets = d.sets.filter { it.exerciseId == exerciseId }
+        if (sets.isEmpty()) return
+        editingNote.value = EditingNote(
+            exerciseId = exerciseId,
+            exerciseName = sets.firstNotNullOfOrNull { it.exerciseName },
+            text = d.exerciseNotes[exerciseId].orEmpty(),
+        )
+    }
+
+    fun onNoteDismiss() {
+        editingNote.value = null
+    }
+
+    /** Saves remotely, then updates the shown note; a blank [text] removes the note. */
+    fun onNoteConfirm(text: String) {
+        val current = editingNote.value ?: return
+        if (current.exerciseId in savingNoteExerciseIds.value) return
+        editingNote.value = null
+        val note = ExerciseNote.normalize(text)
+        savingNoteExerciseIds.value += current.exerciseId
+        viewModelScope.launch {
+            when (val result = workoutHistoryRepository.setExerciseNote(sessionId, current.exerciseId, note)) {
+                is AppResult.Success -> detail.value?.let { d ->
+                    val notes = if (note == null) d.exerciseNotes - current.exerciseId else d.exerciseNotes + (current.exerciseId to note)
+                    detail.value = d.copy(exerciseNotes = notes)
+                }
+                is AppResult.Failure -> eventChannel.send(SessionDetailEvent.ActionFailed(result.error.toMessageRes()))
+            }
+            savingNoteExerciseIds.value -= current.exerciseId
+        }
+    }
 
     fun onExport(format: ExportFormat) {
         val currentDetail = detail.value ?: return

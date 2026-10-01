@@ -13,12 +13,15 @@ import com.lucho314.spotter.core.database.entity.ActiveSetEntity
 import com.lucho314.spotter.core.database.entity.CachedPayloadEntity
 import com.lucho314.spotter.core.database.entity.GarminUploadEntity
 import com.lucho314.spotter.core.database.entity.PendingWorkoutEntity
+import com.lucho314.spotter.core.database.entity.PendingWorkoutExerciseNoteEntity
 import com.lucho314.spotter.core.database.entity.PendingWorkoutSetEntity
 
 /**
  * Offline-first storage (ADR A3): read caches, the active workout (source of truth while
  * training), the outbox of finished-but-not-yet-synced workouts, and the Garmin upload queue.
- * v1 -> v2 adds the queue; v2 -> v3 changes its lookup index. Both are automatic migrations.
+ * v1 -> v2 adds the queue; v2 -> v3 changes its lookup index; v3 -> v4 adds per-exercise notes
+ * (`active_exercise.note` and the `pending_workout_exercise_note` outbox table). All are automatic
+ * migrations.
  */
 @Database(
     entities = [
@@ -28,11 +31,12 @@ import com.lucho314.spotter.core.database.entity.PendingWorkoutSetEntity
         ActiveSetEntity::class,
         PendingWorkoutEntity::class,
         PendingWorkoutSetEntity::class,
+        PendingWorkoutExerciseNoteEntity::class,
         GarminUploadEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
 )
 abstract class SpotterDatabase : RoomDatabase() {
     abstract fun cachedPayloadDao(): CachedPayloadDao

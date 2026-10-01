@@ -90,6 +90,10 @@ class ActiveWorkoutRepositoryImpl @Inject constructor(
         activeWorkoutDao.setCompleted(setId, completedAt?.toEpochMilli())
     }
 
+    override suspend fun updateExerciseNote(exerciseRowId: Long, note: String?) {
+        activeWorkoutDao.updateExerciseNote(exerciseRowId, note)
+    }
+
     override suspend fun addSet(exerciseRowId: Long, setId: String, weightText: String, repsText: String) {
         // Atomic (computes the next set_number and inserts in the same transaction): see
         // ActiveWorkoutDao.insertNextSet's KDoc for why a two-step read-then-write isn't safe here.
@@ -113,7 +117,11 @@ class ActiveWorkoutRepositoryImpl @Inject constructor(
 
     override suspend fun moveToOutbox(sessionId: String, pending: PendingWorkout) {
         database.withTransaction {
-            pendingWorkoutDao.insertFull(pending.toEntity(), pending.sets.map { it.toEntity(pending.id) })
+            pendingWorkoutDao.insertFull(
+                pending.toEntity(),
+                pending.sets.map { it.toEntity(pending.id) },
+                pending.exerciseNotes.map { it.toEntity(pending.id) },
+            )
             activeWorkoutDao.deleteSession(sessionId)
         }
     }

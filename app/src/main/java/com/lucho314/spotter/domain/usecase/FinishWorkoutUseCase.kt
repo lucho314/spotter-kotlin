@@ -6,7 +6,9 @@ import com.lucho314.spotter.core.common.resultOf
 import com.lucho314.spotter.core.notifications.RestTimerAlarmScheduler
 import com.lucho314.spotter.core.work.SyncScheduler
 import com.lucho314.spotter.domain.calc.ActiveSetWeight
+import com.lucho314.spotter.domain.calc.ExerciseNote
 import com.lucho314.spotter.domain.calc.WeightConverter
+import com.lucho314.spotter.domain.model.PendingExerciseNote
 import com.lucho314.spotter.domain.model.PendingSet
 import com.lucho314.spotter.domain.model.PendingStatus
 import com.lucho314.spotter.domain.model.PendingWorkout
@@ -65,6 +67,15 @@ class FinishWorkoutUseCase @Inject constructor(
         }
         if (pendingSets.isEmpty()) return@resultOf FinishResult.NothingToSave
 
+        // Only for exercises with at least one completed set (a note on a skipped exercise has no
+        // session data to show next to). The server keys notes by (session, exercise): if the same
+        // exercise appears twice, the first non-blank note wins.
+        val savedExerciseIds = pendingSets.mapTo(mutableSetOf()) { it.exerciseId }
+        val exerciseNotes = workout.exercises
+            .filter { it.exerciseId in savedExerciseIds }
+            .mapNotNull { exercise -> ExerciseNote.normalize(exercise.note)?.let { PendingExerciseNote(exercise.exerciseId, it) } }
+            .distinctBy { it.exerciseId }
+
         val pendingWorkout = PendingWorkout(
             id = workout.sessionId,
             userId = userId,
@@ -75,6 +86,7 @@ class FinishWorkoutUseCase @Inject constructor(
             sets = pendingSets,
             status = PendingStatus.PENDING,
             lastError = null,
+            exerciseNotes = exerciseNotes,
         )
         activeWorkoutRepository.moveToOutbox(workout.sessionId, pendingWorkout)
         restTimerAlarmScheduler.cancel()

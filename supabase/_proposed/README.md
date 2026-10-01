@@ -17,3 +17,7 @@ puede leerlos.
 `rollback/20260925_b1_b2_rollback.sql` es solo para una emergencia. Su parte A vuelve a abrir
 la lectura anónima; no debe ejecutarse como paso normal. El estado previo y las verificaciones
 posteriores están documentados en [`docs/query_index_review_2026-09-29.md`](../../docs/query_index_review_2026-09-29.md).
+
+`migrations/20261001120000_workout_exercise_notes.sql` se aplicó a mano desde el SQL Editor el
+2026-10-01. Crea la tabla de notas por ejercicio que usa el entrenamiento. Su rollback es
+`rollback/20261001_workout_exercise_notes_rollback.sql`.

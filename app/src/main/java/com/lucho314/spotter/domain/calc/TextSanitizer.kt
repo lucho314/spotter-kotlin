@@ -79,7 +79,7 @@ object TextSanitizer {
     fun isUuid(value: String?): Boolean = value != null && UUID_REGEX.matches(value)
 
     /** Cuts [text] to at most [maxLength] `Char`s, never splitting a surrogate pair at the boundary. */
-    private fun truncateSafely(text: String, maxLength: Int): String {
+    fun truncateSafely(text: String, maxLength: Int): String {
         if (text.length <= maxLength) return text
         var cut = maxLength
         if (cut > 0 && Character.isHighSurrogate(text[cut - 1]) && (cut >= text.length || Character.isLowSurrogate(text[cut]))) {
