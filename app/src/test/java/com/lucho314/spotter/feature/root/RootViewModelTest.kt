@@ -129,6 +129,45 @@ class RootViewModelTest {
     }
 
     @Test
+    fun `a transient Loading after sign-in keeps the app mounted (backgrounding the app)`() = runTest {
+        val authRepository = FakeAuthRepository(AuthState.SignedIn(user))
+        val preferences = FakePreferencesRepository().apply { setOnboardingDone(user.id) }
+        val vm = rootViewModel(validConfig, lazyOf(authRepository), preferencesRepository = preferences)
+        collectUiState(vm)
+        assertThat(vm.uiState.value).isEqualTo(RootUiState.SignedIn(needsOnboarding = false))
+
+        // What supabase-kt does on every app background/foreground cycle.
+        authRepository.state.value = AuthState.Loading
+        runCurrent()
+        assertThat(vm.uiState.value).isEqualTo(RootUiState.SignedIn(needsOnboarding = false))
+
+        authRepository.state.value = AuthState.SignedIn(user)
+        runCurrent()
+        assertThat(vm.uiState.value).isEqualTo(RootUiState.SignedIn(needsOnboarding = false))
+    }
+
+    @Test
+    fun `a real sign-out still goes through after the app was signed in`() = runTest {
+        val authRepository = FakeAuthRepository(AuthState.SignedIn(user))
+        val vm = rootViewModel(validConfig, lazyOf(authRepository))
+        collectUiState(vm)
+
+        authRepository.state.value = AuthState.SignedOut
+        runCurrent()
+
+        assertThat(vm.uiState.value).isEqualTo(RootUiState.SignedOut)
+    }
+
+    @Test
+    fun `Loading is shown until auth resolves for the first time`() = runTest {
+        val authRepository = FakeAuthRepository(AuthState.Loading)
+        val vm = rootViewModel(validConfig, lazyOf(authRepository))
+        collectUiState(vm)
+
+        assertThat(vm.uiState.value).isEqualTo(RootUiState.Loading)
+    }
+
+    @Test
     fun `signing in syncs the display name once per session`() = runTest {
         val authRepository = FakeAuthRepository(AuthState.SignedOut)
         val vm = rootViewModel(validConfig, lazyOf(authRepository))
