@@ -2,7 +2,7 @@
 -- Direct shared-read policies are kept ONLY for authenticated users (the React Native app still
 -- reads shared routines directly) and now honor expires_at.
 -- shared_routines INSERT/UPDATE now require owning the referenced routine.
--- Step 2 (supabase/migrations_pending/b2_step2_drop_direct_shared_reads.sql) removes the direct
+-- Step 2 (supabase/_proposed/migrations_pending/b2_step2_drop_direct_shared_reads.sql) removes the direct
 -- shared-read policies once the RN app is retired.
 
 -- shared_routines ---------------------------------------------------------
@@ -78,8 +78,8 @@ create policy routine_days_select_shared on public.routine_days
   );
 
 -- Supports the policies above and create_share().
-create index if not exists shared_routines_routine_id_active_idx
-  on public.shared_routines (routine_id) where is_active;
+create index if not exists shared_routines_routine_owner_recent_active_idx
+  on public.shared_routines (routine_id, shared_by, created_at desc) where is_active;
 
 -- Deactivate pre-existing forged shares: rows created before shared_insert_own required ownership
 -- (e.g. via the old `auth.uid() = shared_by` check, which let a user share a routine they don't own).

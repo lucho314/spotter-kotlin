@@ -1,7 +1,7 @@
 // parse-routine-image — builds a routine from a photo with an LLM and stores it in the CALLER's account.
 //
 // Security model (B1 fix, 2026-09-25):
-//  - Deployed with verify_jwt = true (supabase/config.toml). The platform check also lets the anon
+//  - Deployed with verify_jwt = true (supabase/_proposed/config.toml). The platform check also lets the anon
 //    key and sb_publishable/sb_secret keys through, so the handler resolves the user itself with
 //    auth.getUser(jwt) and rejects anything that is not a real, non-anonymous user.
 //  - body.user_id is accepted for backward compatibility (RN app) but NEVER used.

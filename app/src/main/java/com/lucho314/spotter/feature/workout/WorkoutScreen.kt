@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,10 +45,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,6 +73,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -88,15 +92,18 @@ import com.lucho314.spotter.core.designsystem.component.LoadingState
 import com.lucho314.spotter.core.designsystem.component.SpotterButton
 import com.lucho314.spotter.core.designsystem.component.SpotterButtonVariant
 import com.lucho314.spotter.core.designsystem.component.SpotterCard
+import com.lucho314.spotter.core.designsystem.component.SpotterTextField
 import com.lucho314.spotter.core.designsystem.theme.Spacing
 import com.lucho314.spotter.core.designsystem.theme.SpotterColors
 import com.lucho314.spotter.core.designsystem.theme.SpotterShapes
+import com.lucho314.spotter.domain.calc.ExerciseNote
 import com.lucho314.spotter.domain.calc.NumberFormatter
 import com.lucho314.spotter.domain.calc.WeightConverter
 import com.lucho314.spotter.domain.calc.WorkoutMath
 import com.lucho314.spotter.domain.model.ActiveExercise
 import com.lucho314.spotter.domain.model.ActiveSet
 import com.lucho314.spotter.domain.model.WeightUnit
+import com.lucho314.spotter.feature.common.ExerciseNoteText
 import com.lucho314.spotter.feature.common.ObserveAsEvents
 import com.lucho314.spotter.feature.common.targetSetsRepsSummary
 import kotlinx.coroutines.launch
@@ -156,6 +163,8 @@ fun WorkoutScreen(
             else -> WorkoutContent(
                 uiState = uiState,
                 display = viewModel::display,
+                noteText = viewModel::noteText,
+                onNoteChange = viewModel::onNoteChange,
                 onClose = { showDiscardConfirm = true },
                 onFinishClick = { showFinishConfirm = true },
                 onSelectExercise = viewModel::onSelectExercise,
@@ -220,6 +229,8 @@ private fun playBeep(context: Context) {
 private fun WorkoutContent(
     uiState: WorkoutUiState,
     display: (ActiveSet) -> ActiveSet,
+    noteText: (ActiveExercise) -> String,
+    onNoteChange: (Long, String) -> Unit,
     onClose: () -> Unit,
     onFinishClick: () -> Unit,
     onSelectExercise: (Int) -> Unit,
@@ -296,6 +307,8 @@ private fun WorkoutContent(
                         exercise = exercise,
                         index = workout.currentExerciseIndex,
                         total = workout.exercises.size,
+                        note = noteText(exercise),
+                        onNoteChange = { text -> onNoteChange(exercise.rowId, text) },
                         onShowLastSession = { onShowLastSession(exercise.exerciseId) },
                     )
                 }
@@ -444,7 +457,18 @@ private fun ExerciseDots(count: Int, selectedIndex: Int, onSelect: (Int) -> Unit
 }
 
 @Composable
-private fun ExerciseHeader(exercise: ActiveExercise, index: Int, total: Int, onShowLastSession: () -> Unit) {
+private fun ExerciseHeader(
+    exercise: ActiveExercise,
+    index: Int,
+    total: Int,
+    note: String,
+    onNoteChange: (String) -> Unit,
+    onShowLastSession: () -> Unit,
+) {
+    // Hidden by default (most sets get no note); keyed by exercise so moving to another one starts
+    // closed again.
+    var noteEditorOpen by rememberSaveable(exercise.rowId) { mutableStateOf(false) }
+    val hasNote = note.isNotBlank()
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Text(
             text = stringResource(R.string.workout_exercise_index, index + 1, total),
@@ -453,13 +477,21 @@ private fun ExerciseHeader(exercise: ActiveExercise, index: Int, total: Int, onS
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Text(text = exercise.name, style = MaterialTheme.typography.headlineSmall, color = SpotterColors.OnSurface, modifier = Modifier.weight(1f))
-            HistoryButton(onClick = onShowLastSession)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                NoteButton(hasNote = hasNote, onClick = { noteEditorOpen = !noteEditorOpen })
+                HistoryButton(onClick = onShowLastSession)
+            }
         }
         Text(
             text = targetSetsRepsSummary(exercise.targetSets, exercise.targetReps),
             style = MaterialTheme.typography.bodyMedium,
             color = SpotterColors.Secondary,
         )
+        if (noteEditorOpen) {
+            ExerciseNoteField(value = note, onValueChange = onNoteChange, onDone = { noteEditorOpen = false })
+        } else if (hasNote) {
+            ExerciseNoteText(note = note, modifier = Modifier.clickable(role = Role.Button) { noteEditorOpen = true })
+        }
         // No background box (RN's exercise image sits directly on the screen, centered at its
         // natural aspect ratio - `showBackground = false`), bounded to a fixed height like RN's
         // `height: 200`.
@@ -470,6 +502,44 @@ private fun ExerciseHeader(exercise: ActiveExercise, index: Int, total: Int, onS
             modifier = Modifier.fillMaxWidth().height(200.dp),
         )
     }
+}
+
+/** Same look as [HistoryButton]; lime instead of cyan once the exercise has a note. */
+@Composable
+private fun NoteButton(hasNote: Boolean, onClick: () -> Unit) {
+    val tint = if (hasNote) SpotterColors.PrimaryContainer else SpotterColors.Secondary
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(SpotterShapes.CompactField)
+            .background(tint.copy(alpha = 0.1f))
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Outlined.EditNote,
+            contentDescription = stringResource(if (hasNote) R.string.workout_note_edit else R.string.workout_note_add),
+            tint = tint,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun ExerciseNoteField(value: String, onValueChange: (String) -> Unit, onDone: () -> Unit) {
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    SpotterTextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = stringResource(R.string.workout_note_placeholder),
+        supportingText = stringResource(R.string.workout_note_counter, value.length, ExerciseNote.MAX_LENGTH),
+        keyboardCapitalization = KeyboardCapitalization.Sentences,
+        imeAction = ImeAction.Done,
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); onDone() }),
+        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+    )
 }
 
 /** RN's cyan clock icon in a translucent-cyan rounded square (`historyBtn`). */
@@ -703,6 +773,9 @@ private fun LastSessionSheet(state: LastSessionUiState, weightUnit: WeightUnit, 
                                 color = SpotterColors.OnSurfaceVariant,
                                 modifier = Modifier.padding(bottom = Spacing.xs),
                             )
+                        }
+                        if (session.note != null) {
+                            ExerciseNoteText(note = session.note, modifier = Modifier.padding(bottom = Spacing.sm))
                         }
                         // Already ordered by setNumber (WorkoutHistoryRepositoryImpl.getLastSession).
                         session.sets.forEach { set ->

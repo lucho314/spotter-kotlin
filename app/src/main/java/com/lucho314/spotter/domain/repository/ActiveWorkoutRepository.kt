@@ -26,6 +26,9 @@ interface ActiveWorkoutRepository {
 
     suspend fun updateSetInputs(setId: String, weightText: String, repsText: String)
     suspend fun setCompleted(setId: String, completedAt: Instant?)
+
+    /** Stores the exercise's note text as typed; normalization happens when finishing. */
+    suspend fun updateExerciseNote(exerciseRowId: Long, note: String?)
     suspend fun addSet(exerciseRowId: Long, setId: String, weightText: String, repsText: String)
     suspend fun setCurrentExercise(sessionId: String, index: Int)
     suspend fun setRestTimer(sessionId: String, rest: RestTimer?)

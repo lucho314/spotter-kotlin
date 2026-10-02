@@ -9,10 +9,11 @@ data class AiImportedRoutine(val routineId: String, val routineName: String?)
  * [com.lucho314.spotter.data.repository.AiImportErrorMapper]'s KDoc.
  */
 object AiImportErrorCodes {
+    const val RATE_LIMITED = "ai_rate_limited"
     /** [io.ktor.client.plugins.HttpRequestTimeoutException]: the request may have been processed regardless. */
     const val TIMEOUT = "ai_timeout"
 
-    /** A 200 response with `{"error": ...}`. */
+    /** The image had no recognizable exercises (or a legacy response has no error code). */
     const val REJECTED = "ai_rejected"
 
     /** Undecodable response, missing/non-UUID routine id, or the routine isn't found for the user afterwards. */

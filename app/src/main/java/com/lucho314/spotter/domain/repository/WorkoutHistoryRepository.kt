@@ -25,6 +25,9 @@ interface WorkoutHistoryRepository {
     /** Deletes with an exact row count; 0 rows affected maps to `Server("not_deleted")`. */
     suspend fun deleteSession(sessionId: String): AppResult<Unit>
 
+    /** Saves [note] (normalized) for that exercise of the session; a blank/null note deletes it. */
+    suspend fun setExerciseNote(sessionId: String, exerciseId: Int, note: String?): AppResult<Unit>
+
     suspend fun getLastSession(userId: String, exerciseId: Int): AppResult<LastExerciseSession?>
     suspend fun getCompletedSince(userId: String, since: Instant): AppResult<Int>
     suspend fun getLastCompletedAt(userId: String): AppResult<Instant?>

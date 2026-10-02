@@ -50,6 +50,30 @@ class FinishWorkoutUseCaseTest {
         ),
     )
 
+    private fun exercise(rowId: Long, exerciseId: Int, note: String?, sets: List<ActiveSet>) = ActiveExercise(
+        rowId = rowId, position = rowId.toInt(), exerciseId = exerciseId, name = "E$exerciseId", equipment = Equipment.BARBELL,
+        mediaUrl = null, imageUrl = null, targetSets = 3, targetReps = 10, restSeconds = 90, sets = sets, note = note,
+    )
+
+    @Test
+    fun `exercise notes are normalized and kept only for exercises with completed sets`() = runTest {
+        val done = Instant.ofEpochSecond(10)
+        val workout = workout(WeightUnit.KG, emptyList()).copy(
+            exercises = listOf(
+                exercise(1L, exerciseId = 10, note = "  la próxima aumentar ", sets = listOf(set("a", "80", "10", done))),
+                exercise(2L, exerciseId = 20, note = "no lo hice", sets = listOf(set("b", "80", "10", completedAt = null))),
+                exercise(3L, exerciseId = 30, note = "   ", sets = listOf(set("c", "80", "10", done))),
+                exercise(4L, exerciseId = 10, note = "segunda vez", sets = listOf(set("d", "80", "10", done))),
+            ),
+        )
+        activeWorkoutRepository.start(workout)
+
+        useCase(USER_ID, "session-1")
+
+        val notes = activeWorkoutRepository.movedToOutbox.single().exerciseNotes
+        assertThat(notes.map { it.exerciseId to it.note }).containsExactly(10 to "la próxima aumentar")
+    }
+
     @Test
     fun `converts lb input to kg for the outbox`() = runTest {
         val workout = workout(WeightUnit.LB, listOf(set("set-1", "100", "10", Instant.ofEpochSecond(10))))

@@ -68,6 +68,12 @@ class FakeActiveWorkoutRepository : ActiveWorkoutRepository {
         }
     }
 
+    override suspend fun updateExerciseNote(exerciseRowId: Long, note: String?) {
+        mutate { workout ->
+            workout.copy(exercises = workout.exercises.map { exercise -> if (exercise.rowId == exerciseRowId) exercise.copy(note = note) else exercise })
+        }
+    }
+
     override suspend fun addSet(exerciseRowId: Long, setId: String, weightText: String, repsText: String) {
         mutate { workout ->
             workout.copy(exercises = workout.exercises.map { exercise ->

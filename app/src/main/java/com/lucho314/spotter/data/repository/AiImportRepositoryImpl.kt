@@ -3,6 +3,7 @@ package com.lucho314.spotter.data.repository
 import com.lucho314.spotter.core.common.AppError
 import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.common.Logger
+import com.lucho314.spotter.core.common.ValidationReason
 import com.lucho314.spotter.data.remote.datasource.AiImportRemoteDataSource
 import com.lucho314.spotter.data.remote.dto.ParseRoutineImageRequest
 import com.lucho314.spotter.domain.model.AiImportErrorCodes
@@ -24,8 +25,9 @@ class AiImportRepositoryImpl @Inject constructor(
 
     override suspend fun importFromImage(userId: String, base64Jpeg: String): AppResult<AiImportedRoutine> {
         val response = try {
-            // `user_id` is still sent for compatibility with the live edge function (section 8, B1).
-            remote.parseRoutineImage(ParseRoutineImageRequest(imageBase64 = base64Jpeg, mimeType = JPEG_MIME_TYPE, userId = userId))
+            // The edge function derives identity from the JWT. The use case checks ownership
+            // with userId after this returns; the request itself contains no user id.
+            remote.parseRoutineImage(ParseRoutineImageRequest(imageBase64 = base64Jpeg, mimeType = JPEG_MIME_TYPE))
         } catch (e: CancellationException) {
             throw e
         } catch (t: Throwable) {
@@ -36,7 +38,15 @@ class AiImportRepositoryImpl @Inject constructor(
 
         if (response.error != null) {
             logger.d(TAG, "AI import rejected by function")
-            return AppResult.Failure(AppError.Server(AiImportErrorCodes.REJECTED))
+            return AppResult.Failure(when (response.code) {
+                "RATE_LIMITED" -> AppError.Server(AiImportErrorCodes.RATE_LIMITED)
+                "IMAGE_TOO_LARGE" -> AppError.Validation(ValidationReason.IMAGE_TOO_LARGE)
+                "INVALID_IMAGE", "UNSUPPORTED_IMAGE_TYPE", "INVALID_REQUEST" -> AppError.Validation(ValidationReason.IMAGE_UNREADABLE)
+                "UNAUTHORIZED" -> AppError.Unauthorized
+                "NO_EXERCISES_FOUND", "AI_PARSE_FAILED" -> AppError.Server(AiImportErrorCodes.REJECTED)
+                null -> AppError.Server(AiImportErrorCodes.REJECTED)
+                else -> AppError.Server(AiImportErrorCodes.FAILED)
+            })
         }
         val routineId = response.routineId ?: return AppResult.Failure(AppError.Server(AiImportErrorCodes.INVALID_RESPONSE))
         return AppResult.Success(AiImportedRoutine(routineId, response.routineName))

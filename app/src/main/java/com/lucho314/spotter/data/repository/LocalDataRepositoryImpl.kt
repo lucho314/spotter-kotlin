@@ -27,6 +27,7 @@ class LocalDataRepositoryImpl @Inject constructor(
             activeWorkoutDao.deleteAllExercises()
             activeWorkoutDao.deleteAllSessions()
             pendingWorkoutDao.deleteAllSets()
+            pendingWorkoutDao.deleteAllExerciseNotes()
             pendingWorkoutDao.deleteAll()
             cachedPayloadDao.deleteAll()
             garminUploadDao.deleteAll()

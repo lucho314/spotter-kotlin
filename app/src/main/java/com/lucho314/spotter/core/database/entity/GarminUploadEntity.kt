@@ -12,7 +12,7 @@ import androidx.room.PrimaryKey
  * as JSON for the automatic path (right after finishing); `null` means the worker should look the
  * session up in [com.lucho314.spotter.domain.repository.WorkoutHistoryRepository] (the manual path).
  */
-@Entity(tableName = "garmin_upload", indices = [Index("user_id")])
+@Entity(tableName = "garmin_upload", indices = [Index(value = ["user_id", "status", "created_at_epoch_ms"])])
 data class GarminUploadEntity(
     @PrimaryKey @ColumnInfo(name = "workout_id") val workoutId: String,
     @ColumnInfo(name = "user_id") val userId: String,

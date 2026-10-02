@@ -69,6 +69,9 @@ interface ActiveWorkoutDao {
     @Query("UPDATE active_set SET weight_text = :weightText, reps_text = :repsText WHERE id = :setId")
     suspend fun updateSetInputs(setId: String, weightText: String, repsText: String)
 
+    @Query("UPDATE active_exercise SET note = :note WHERE id = :exerciseRowId")
+    suspend fun updateExerciseNote(exerciseRowId: Long, note: String?)
+
     @Query("UPDATE active_set SET completed_at_epoch_ms = :completedAtEpochMs WHERE id = :setId")
     suspend fun setCompleted(setId: String, completedAtEpochMs: Long?)
 

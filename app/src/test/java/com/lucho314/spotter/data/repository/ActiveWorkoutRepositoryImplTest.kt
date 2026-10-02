@@ -18,10 +18,12 @@ import com.lucho314.spotter.domain.model.ActiveSet
 import com.lucho314.spotter.domain.model.ActiveWorkout
 import com.lucho314.spotter.domain.model.ActiveWorkoutStartOutcome
 import com.lucho314.spotter.domain.model.Equipment
+import com.lucho314.spotter.domain.model.PendingExerciseNote
 import com.lucho314.spotter.domain.model.PendingWorkout
 import com.lucho314.spotter.domain.model.PendingStatus
 import com.lucho314.spotter.domain.model.RestTimer
 import com.lucho314.spotter.domain.model.WeightUnit
+import com.lucho314.spotter.testutil.FakeWorkoutRemoteDataSource
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -145,6 +147,30 @@ class ActiveWorkoutRepositoryImplTest {
 
         assertThat(repository.getActive("user-1")).isNull()
         assertThat(database.pendingWorkoutDao().getPending("user-1").map { it.workout.id }).containsExactly("s1")
+    }
+
+    @Test
+    fun `exercise notes survive in Room and move to the outbox with the workout`() = runTest {
+        repository.start(workout())
+        val rowId = repository.getActive("user-1")!!.exercises.first().rowId
+
+        repository.updateExerciseNote(rowId, "la próxima aumentar")
+        val active = repository.getActive("user-1")!!
+        assertThat(active.exercises.first().note).isEqualTo("la próxima aumentar")
+
+        val exerciseId = active.exercises.first().exerciseId
+        repository.moveToOutbox(
+            "s1",
+            PendingWorkout(
+                id = "s1", userId = "user-1", routineId = "r1",
+                startedAt = Instant.ofEpochMilli(1000), completedAt = Instant.ofEpochMilli(2000),
+                notes = null, sets = emptyList(), status = PendingStatus.PENDING, lastError = null,
+                exerciseNotes = listOf(PendingExerciseNote(exerciseId = exerciseId, note = "la próxima aumentar")),
+            ),
+        )
+
+        val pending = PendingWorkoutRepositoryImpl(database.pendingWorkoutDao(), FakeWorkoutRemoteDataSource()).getPending("user-1").single()
+        assertThat(pending.exerciseNotes).containsExactly(PendingExerciseNote(exerciseId = exerciseId, note = "la próxima aumentar"))
     }
 
     @Test

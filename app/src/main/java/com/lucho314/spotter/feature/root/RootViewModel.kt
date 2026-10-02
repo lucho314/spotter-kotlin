@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
@@ -63,6 +64,17 @@ class RootViewModel @Inject constructor(
 
     private var lastSyncedUserId: String? = null
 
+    /**
+     * Whether auth has already resolved to signed in/out once in this ViewModel's lifetime. After
+     * that, a transient [AuthState.Loading] is ignored: supabase-kt resets the session status to
+     * `Initializing` every time the app goes to the background (its `ProcessLifecycleOwner`
+     * `onStop` callback, e.g. when locking the phone) and reloads it on `onStart`. Surfacing that as
+     * [RootUiState.Loading] made [SpotterRoot] dispose the whole authenticated app - and its
+     * NavController - so coming back always landed on the Dashboard instead of where the user was
+     * (e.g. mid-workout). A real sign-out still goes through as [RootUiState.SignedOut].
+     */
+    private var authResolved = false
+
     val uiState: StateFlow<RootUiState> = if (!appConfig.isValid) {
         MutableStateFlow(RootUiState.ConfigError)
     } else {
@@ -75,6 +87,8 @@ class RootViewModel @Inject constructor(
                         .map { done -> RootUiState.SignedIn(needsOnboarding = !done) }
                 }
             }
+            .filterNot { state -> state == RootUiState.Loading && authResolved }
+            .onEach { state -> if (state != RootUiState.Loading) authResolved = true }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RootUiState.Loading)
     }
 

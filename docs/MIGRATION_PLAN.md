@@ -411,7 +411,14 @@ Formato: archivo:línea, problema, y cómo lo evita la versión Kotlin.
 
 ---
 
-## 8. Hallazgos del backend: ítems SEPARADOS que requieren aprobación del usuario
+## 8. Hallazgos del backend: estado histórico y actualización
+
+**Actualización 2026-09-29:** la decisión anterior de no tocar Supabase fue reemplazada por la
+solicitud de corregir las consultas. Se aplicaron B1, B2 paso 1 y B6, junto con la optimización
+RLS e índice de shares; la Edge Function está en versión 11. B2 paso 2 sigue pendiente hasta
+retirar la app React Native. El resto de esta sección registra los hallazgos tal como se
+describieron antes del despliegue; ver [`query_index_review_2026-09-29.md`](query_index_review_2026-09-29.md)
+para el estado verificado.
 
 **No se implementan en este plan. El cliente Kotlin funciona sin ellos.**
 
@@ -1376,5 +1383,5 @@ export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"; export PATH="$JA
 
 1. **Google Credential Manager.** Requiere crear en Google Cloud un cliente OAuth "Android" (paquete `com.lucho314.spotter` y `.debug`, más el SHA-1 de debug y release) y poner el **Web client ID** en `GOOGLE_WEB_CLIENT_ID`. **Por defecto:** vacío, y se usa OAuth PKCE por navegador (ya funciona con la configuración actual de Supabase).
 2. **`applicationId`.** **Por defecto:** `com.lucho314.spotter`, lo que permite reemplazar la app RN en Play Store si se usa la misma keystore de EAS. Debug lleva sufijo `.debug`.
-3. **Ítems del backend B1-B6** (sección 8): el usuario decidió (2026-09-25) no modificar el backend. Existe una corrección revisada y lista para aplicar en `supabase/_proposed/` si se reconsidera. **Por defecto:** no se tocan.
+3. **Ítems del backend B1-B6** (sección 8): B1, B2 paso 1 y B6 se aplicaron el 2026-09-29. B2 paso 2 espera el retiro de la app React Native; B3-B5 requieren un trabajo separado.
 4. **Ícono en alta resolución.** **Por defecto:** se reutilizan los `mipmap-*` generados por Expo en `E:\Spotter\android\app\src\main\res`.

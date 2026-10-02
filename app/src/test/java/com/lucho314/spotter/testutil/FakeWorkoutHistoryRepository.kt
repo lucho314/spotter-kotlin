@@ -23,6 +23,8 @@ class FakeWorkoutHistoryRepository : WorkoutHistoryRepository {
     var completedSinceResult: AppResult<Int> = AppResult.Success(0)
     var lastCompletedAtResult: AppResult<Instant?> = AppResult.Success(null)
     var countCompletedResult: AppResult<Int> = AppResult.Success(0)
+    var setExerciseNoteResult: AppResult<Unit> = AppResult.Success(Unit)
+    val setExerciseNoteCalls = mutableListOf<Triple<String, Int, String?>>()
 
     /** Set to make the next [updateSet] call suspend until this deferred completes (row-level guard tests). */
     var updateSetGate: CompletableDeferred<Unit>? = null
@@ -54,6 +56,11 @@ class FakeWorkoutHistoryRepository : WorkoutHistoryRepository {
     override suspend fun addSet(sessionId: String, exerciseId: Int, setNumber: Int, weightKg: Double, reps: Int, completedAt: Instant): AppResult<Unit> {
         addSetCalls += AddSetCall(sessionId, exerciseId, setNumber, weightKg, reps, completedAt)
         return addSetResult
+    }
+
+    override suspend fun setExerciseNote(sessionId: String, exerciseId: Int, note: String?): AppResult<Unit> {
+        setExerciseNoteCalls += Triple(sessionId, exerciseId, note)
+        return setExerciseNoteResult
     }
 
     override suspend fun deleteSet(setId: String): AppResult<Unit> {

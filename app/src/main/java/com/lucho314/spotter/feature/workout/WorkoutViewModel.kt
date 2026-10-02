@@ -11,6 +11,7 @@ import com.lucho314.spotter.core.common.IoDispatcher
 import com.lucho314.spotter.core.common.TimeProvider
 import com.lucho314.spotter.core.network.NetworkMonitor
 import com.lucho314.spotter.core.notifications.RestTimerAlarmScheduler
+import com.lucho314.spotter.domain.calc.ExerciseNote
 import com.lucho314.spotter.domain.model.ActiveExercise
 import com.lucho314.spotter.domain.model.ActiveSet
 import com.lucho314.spotter.domain.model.ActiveWorkout
@@ -126,6 +127,10 @@ class WorkoutViewModel @Inject constructor(
     private val drafts: SnapshotStateMap<String, InputDraft> = mutableStateMapOf()
     private val persistJobs = mutableMapOf<String, Job>()
 
+    /** Same overlay + debounce as [drafts], for each exercise's note, keyed by [ActiveExercise.rowId]. */
+    private val noteDrafts: SnapshotStateMap<Long, String> = mutableStateMapOf()
+    private val notePersistJobs = mutableMapOf<Long, Job>()
+
     private val eventChannel = Channel<WorkoutEvent>(Channel.BUFFERED)
     val events: Flow<WorkoutEvent> = eventChannel.receiveAsFlow()
 
@@ -193,6 +198,23 @@ class WorkoutViewModel @Inject constructor(
         }
     }
 
+    /** [exercise]'s note text as currently typed (draft first, then what's persisted). */
+    fun noteText(exercise: ActiveExercise): String = noteDrafts[exercise.rowId] ?: exercise.note.orEmpty()
+
+    fun onNoteChange(exerciseRowId: Long, text: String) {
+        noteDrafts[exerciseRowId] = ExerciseNote.clampInput(text)
+        notePersistJobs[exerciseRowId]?.cancel()
+        notePersistJobs[exerciseRowId] = viewModelScope.launch {
+            delay(300)
+            flushNoteDraft(exerciseRowId)
+        }
+    }
+
+    private suspend fun flushNoteDraft(exerciseRowId: Long) {
+        val text = noteDrafts[exerciseRowId] ?: return
+        activeWorkoutRepository.updateExerciseNote(exerciseRowId, text.ifEmpty { null })
+    }
+
     fun onWeightChange(setId: String, text: String) {
         updateDraft(setId) { it.copy(weightText = text) }
         schedulePersist(setId)
@@ -230,6 +252,9 @@ class WorkoutViewModel @Inject constructor(
         persistJobs.values.forEach { it.cancel() }
         persistJobs.clear()
         drafts.keys.toList().forEach { flushDraft(it) }
+        notePersistJobs.values.forEach { it.cancel() }
+        notePersistJobs.clear()
+        noteDrafts.keys.toList().forEach { flushNoteDraft(it) }
     }
 
     fun onToggleSet(exerciseRowId: Long, setId: String) {
@@ -345,9 +370,11 @@ class WorkoutViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         val pending = drafts.toMap()
-        if (pending.isEmpty()) return
+        val pendingNotes = noteDrafts.toMap()
+        if (pending.isEmpty() && pendingNotes.isEmpty()) return
         CoroutineScope(SupervisorJob() + ioDispatcher).launch {
             pending.forEach { (setId, draft) -> updateSetInputUseCase(setId, draft.weightText, draft.repsText) }
+            pendingNotes.forEach { (rowId, text) -> activeWorkoutRepository.updateExerciseNote(rowId, text.ifEmpty { null }) }
         }
     }
 }

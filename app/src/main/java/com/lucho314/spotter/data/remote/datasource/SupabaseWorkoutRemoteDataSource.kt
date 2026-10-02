@@ -1,6 +1,9 @@
 package com.lucho314.spotter.data.remote.datasource
 
 import com.lucho314.spotter.data.remote.dto.IdDto
+import com.lucho314.spotter.data.remote.dto.WorkoutExerciseNoteDto
+import com.lucho314.spotter.data.remote.dto.WorkoutExerciseNoteInsertDto
+import com.lucho314.spotter.data.remote.dto.WorkoutExerciseNoteRowDto
 import com.lucho314.spotter.data.remote.dto.WorkoutSessionDto
 import com.lucho314.spotter.data.remote.dto.WorkoutSessionInsertDto
 import com.lucho314.spotter.data.remote.dto.WorkoutSetDto
@@ -90,6 +93,35 @@ class SupabaseWorkoutRemoteDataSource @Inject constructor(
             limit(limitRows)
         }.decodeList()
 
+    override suspend fun getExerciseNote(sessionId: String, exerciseId: Int): String? =
+        postgrest.from("workout_exercise_notes").select(Columns.list("note")) {
+            filter {
+                eq("session_id", sessionId)
+                eq("exercise_id", exerciseId)
+            }
+            limit(1)
+        }.decodeList<WorkoutExerciseNoteDto>().firstOrNull()?.note
+
+    override suspend fun getSessionExerciseNotes(sessionId: String): List<WorkoutExerciseNoteRowDto> =
+        postgrest.from("workout_exercise_notes").select(Columns.list("exercise_id", "note")) {
+            filter { eq("session_id", sessionId) }
+        }.decodeList()
+
+    override suspend fun saveExerciseNote(dto: WorkoutExerciseNoteInsertDto) {
+        postgrest.from("workout_exercise_notes").upsert(dto) {
+            onConflict = "session_id,exercise_id"
+        }
+    }
+
+    override suspend fun deleteExerciseNote(sessionId: String, exerciseId: Int) {
+        postgrest.from("workout_exercise_notes").delete {
+            filter {
+                eq("session_id", sessionId)
+                eq("exercise_id", exerciseId)
+            }
+        }
+    }
+
     override suspend fun getCompletedSince(userId: String, sinceIso: String): Int =
         postgrest.from("workout_sessions").select(Columns.list("id")) {
             count(Count.EXACT)
@@ -135,6 +167,14 @@ class SupabaseWorkoutRemoteDataSource @Inject constructor(
         if (dtos.isEmpty()) return
         postgrest.from("workout_sets").upsert(dtos) {
             onConflict = "id"
+            ignoreDuplicates = true
+        }
+    }
+
+    override suspend fun uploadExerciseNotes(dtos: List<WorkoutExerciseNoteInsertDto>) {
+        if (dtos.isEmpty()) return
+        postgrest.from("workout_exercise_notes").upsert(dtos) {
+            onConflict = "session_id,exercise_id"
             ignoreDuplicates = true
         }
     }

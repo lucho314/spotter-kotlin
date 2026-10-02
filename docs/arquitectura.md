@@ -516,13 +516,13 @@ librería:
 
 ### Backend (Supabase)
 
-Sin cambios de esquema. Decisión del usuario (2026-09-25): **no modificar el backend en vivo**.
-Los hallazgos B1 (crítico, `parse-routine-image` confía en `user_id` del body con la service role
-key), B2 (alto, lectura de rutinas compartidas sin autenticación), B3-B6 siguen abiertos — detalle
-en `MIGRATION_PLAN.md` §8 y en [`review_carryover.md`](review_carryover.md). Existe una corrección
-revisada y aprobada para B1/B2/B6 en [`supabase/_proposed/README.md`](../supabase/_proposed/README.md),
-no aplicada. Esquema en vivo documentado en
-[`docs/backend/live_schema_2026-09-26.md`](backend/live_schema_2026-09-26.md).
+El 2026-09-29 se desplegaron B1, B2 paso 1 y B6: importación de IA autenticada y transaccional,
+cuota por usuario, y bloqueo de lectura anónima de rutinas compartidas. La app React Native anterior
+aún requiere lecturas directas para usuarios autenticados; B2 paso 2 sigue pendiente. Se optimizaron
+las políticas RLS de propietario y se añadió el índice de búsqueda de shares. Detalle en
+[`supabase/_proposed/README.md`](../supabase/_proposed/README.md) y
+[`query_index_review_2026-09-29.md`](query_index_review_2026-09-29.md). El snapshot
+[`live_schema_2026-09-26.md`](backend/live_schema_2026-09-26.md) describe el estado anterior.
 
 ## Decisiones de arquitectura (ADR)
 

@@ -52,8 +52,29 @@ data class PendingWorkoutSetEntity(
     @ColumnInfo(name = "completed_at") val completedAt: String,
 )
 
+/** One note per exercise of an outbox workout; uploaded to `workout_exercise_notes` after its sets. */
+@Entity(
+    tableName = "pending_workout_exercise_note",
+    primaryKeys = ["workout_id", "exercise_id"],
+    foreignKeys = [
+        ForeignKey(
+            entity = PendingWorkoutEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["workout_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class PendingWorkoutExerciseNoteEntity(
+    @ColumnInfo(name = "workout_id") val workoutId: String,
+    @ColumnInfo(name = "exercise_id") val exerciseId: Int,
+    @ColumnInfo(name = "note") val note: String,
+)
+
 data class PendingWorkoutWithSets(
     @Embedded val workout: PendingWorkoutEntity,
     @Relation(parentColumn = "id", entityColumn = "workout_id")
     val sets: List<PendingWorkoutSetEntity>,
+    @Relation(parentColumn = "id", entityColumn = "workout_id")
+    val exerciseNotes: List<PendingWorkoutExerciseNoteEntity> = emptyList(),
 )

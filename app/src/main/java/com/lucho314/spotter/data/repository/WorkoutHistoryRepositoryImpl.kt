@@ -12,7 +12,9 @@ import com.lucho314.spotter.data.mapper.toInstant
 import com.lucho314.spotter.data.mapper.toSummary
 import com.lucho314.spotter.data.mapper.toTimestampString
 import com.lucho314.spotter.data.remote.datasource.WorkoutRemoteDataSource
+import com.lucho314.spotter.data.remote.dto.WorkoutExerciseNoteInsertDto
 import com.lucho314.spotter.data.remote.dto.WorkoutSetInsertDto
+import com.lucho314.spotter.domain.calc.ExerciseNote
 import com.lucho314.spotter.domain.model.LastExerciseSession
 import com.lucho314.spotter.domain.model.WorkoutSessionDetail
 import com.lucho314.spotter.domain.model.WorkoutSessionSummary
@@ -35,7 +37,26 @@ class WorkoutHistoryRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getSession(sessionId: String): AppResult<WorkoutSessionDetail> =
-        safeCall { remote.getSession(sessionId)?.toDetail() }.notNullOrNotFound()
+        when (val result = safeCall { remote.getSession(sessionId)?.toDetail() }.notNullOrNotFound()) {
+            is AppResult.Success -> AppResult.Success(result.value.copy(exerciseNotes = getSessionExerciseNotesOrEmpty(sessionId)))
+            is AppResult.Failure -> result
+        }
+
+    /** Best-effort, like [getExerciseNoteOrNull]: the session's sets are shown even if this fails. */
+    private suspend fun getSessionExerciseNotesOrEmpty(sessionId: String): Map<Int, String> =
+        when (val result = safeCall { remote.getSessionExerciseNotes(sessionId) }) {
+            is AppResult.Success -> result.value.mapNotNull { row -> ExerciseNote.normalize(row.note)?.let { row.exerciseId to it } }.toMap()
+            is AppResult.Failure -> emptyMap()
+        }
+
+    override suspend fun setExerciseNote(sessionId: String, exerciseId: Int, note: String?): AppResult<Unit> = safeCall {
+        val normalized = ExerciseNote.normalize(note)
+        if (normalized == null) {
+            remote.deleteExerciseNote(sessionId, exerciseId)
+        } else {
+            remote.saveExerciseNote(WorkoutExerciseNoteInsertDto(sessionId = sessionId, exerciseId = exerciseId, note = normalized))
+        }
+    }
 
     override suspend fun updateSet(setId: String, weightKg: Double, reps: Int): AppResult<Unit> =
         safeCall { remote.updateSet(setId, weightKg, reps) }.requirePositiveOrNotFound()
@@ -77,9 +98,21 @@ class WorkoutHistoryRepositoryImpl @Inject constructor(
             // The query is ordered by completed_at DESC (to find the *latest* session cheaply);
             // within that session, sets must be shown in set_number order, not completion order.
             val sessionSets = sets.filter { it.sessionId == latestSessionId }.sortedBy { it.setNumber }
-            LastExerciseSession(sessionId = latestSessionId, date = sessionSets.minOf { it.completedAt }, sets = sessionSets)
+            LastExerciseSession(
+                sessionId = latestSessionId,
+                date = sessionSets.minOf { it.completedAt },
+                sets = sessionSets,
+                note = getExerciseNoteOrNull(latestSessionId, exerciseId),
+            )
         }
     }
+
+    /** Best-effort: the sets are what matters here, so a failed note lookup just hides the note. */
+    private suspend fun getExerciseNoteOrNull(sessionId: String, exerciseId: Int): String? =
+        when (val result = safeCall { remote.getExerciseNote(sessionId, exerciseId) }) {
+            is AppResult.Success -> ExerciseNote.normalize(result.value)
+            is AppResult.Failure -> null
+        }
 
     override suspend fun getCompletedSince(userId: String, since: Instant): AppResult<Int> = safeCall {
         remote.getCompletedSince(userId, since.toTimestampString())

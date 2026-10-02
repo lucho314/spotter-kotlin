@@ -76,6 +76,49 @@ class SessionDetailViewModelTest {
     }
 
     @Test
+    fun `saving a note shows it on its exercise block, and a blank one removes it`() = runTest(testDispatcher) {
+        workoutHistoryRepository.sessionResult = AppResult.Success(
+            detail(listOf(set("a1", exerciseId = 1, exerciseName = "Press", setNumber = 1))).copy(exerciseNotes = mapOf(1 to "vieja")),
+        )
+        val vm = viewModel()
+        collectUiState(vm)
+        assertThat(vm.uiState.value.blocks.single().note).isEqualTo("vieja")
+
+        vm.onEditNote(1)
+        runCurrent()
+        assertThat(vm.uiState.value.editingNote?.text).isEqualTo("vieja")
+        vm.onNoteConfirm(" la próxima aumentar ")
+        runCurrent()
+
+        assertThat(workoutHistoryRepository.setExerciseNoteCalls).containsExactly(Triple("s1", 1, "la próxima aumentar"))
+        assertThat(vm.uiState.value.editingNote).isNull()
+        assertThat(vm.uiState.value.blocks.single().note).isEqualTo("la próxima aumentar")
+
+        vm.onEditNote(1)
+        runCurrent()
+        vm.onNoteConfirm("  ")
+        runCurrent()
+        assertThat(vm.uiState.value.blocks.single().note).isNull()
+    }
+
+    @Test
+    fun `a failed note save keeps the previous note and reports the error`() = runTest(testDispatcher) {
+        workoutHistoryRepository.sessionResult = AppResult.Success(detail(listOf(set("a1", exerciseId = 1, exerciseName = "Press", setNumber = 1))))
+        workoutHistoryRepository.setExerciseNoteResult = AppResult.Failure(AppError.Network)
+        val vm = viewModel()
+        collectUiState(vm)
+
+        vm.events.test {
+            vm.onEditNote(1)
+            runCurrent()
+            vm.onNoteConfirm("algo")
+            runCurrent()
+            assertThat(awaitItem()).isInstanceOf(SessionDetailEvent.ActionFailed::class.java)
+        }
+        assertThat(vm.uiState.value.blocks.single().note).isNull()
+    }
+
+    @Test
     fun `addSet uses max setNumber plus 1, copies weight and reps, and uses the session completedAt`() = runTest(testDispatcher) {
         workoutHistoryRepository.sessionResult = AppResult.Success(
             detail(listOf(set("a1", exerciseId = 1, exerciseName = "Press", setNumber = 1, weightKg = 85.0, reps = 8))),

@@ -12,8 +12,8 @@ import kotlinx.serialization.SerializationException
 /**
  * Maps exceptions thrown by [com.lucho314.spotter.data.remote.datasource.AiImportRemoteDataSource]
  * to [AppError], **never** carrying the edge function's own error text (`RestException.error`,
- * `Throwable.message`): the live function's error text embeds the upstream gateway's own message,
- * which can leak third-party data and must never reach a log or the UI (section 8, B1/B6).
+ * `Throwable.message`): error text can contain third-party details and must never reach a log
+ * or the UI.
  *
  * Branch order matters: [HttpRequestTimeoutException] is itself an `IOException`, and
  * [ErrorMapper.map] would otherwise fold it into a generic [AppError.Network] - it's checked first
@@ -24,7 +24,7 @@ internal object AiImportErrorMapper {
     fun map(t: Throwable): AppError = when {
         t is HttpRequestTimeoutException -> AppError.Server(AiImportErrorCodes.TIMEOUT)
         t is RestException && t.statusCode == 413 -> AppError.Validation(ValidationReason.IMAGE_TOO_LARGE)
-        t is UnauthorizedRestException -> AppError.Unauthorized
+        t is UnauthorizedRestException || (t is RestException && t.statusCode == 401) -> AppError.Unauthorized
         t is RestException -> AppError.Server(AiImportErrorCodes.FAILED) // never t.error / t.message
         t is SerializationException -> AppError.Server(AiImportErrorCodes.INVALID_RESPONSE)
         else -> ErrorMapper.map(t) // IOException/HttpRequestException -> Network, etc.

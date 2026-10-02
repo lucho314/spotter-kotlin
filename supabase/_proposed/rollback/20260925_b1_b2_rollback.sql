@@ -33,5 +33,5 @@ create policy routine_days_select_own on public.routine_days for select
 -- drop function if exists public.create_routine_from_import(text, jsonb);
 -- drop function if exists public.consume_ai_import_quota();
 -- drop table if exists public.ai_import_usage;
--- drop index if exists public.shared_routines_routine_id_active_idx;
+-- drop index if exists public.shared_routines_routine_owner_recent_active_idx;
 -- notify pgrst, 'reload schema';

@@ -5,6 +5,7 @@ import com.lucho314.spotter.core.common.AppResult
 import com.lucho314.spotter.core.database.dao.PendingWorkoutDao
 import com.lucho314.spotter.core.network.safeCall
 import com.lucho314.spotter.data.mapper.toDomain
+import com.lucho314.spotter.data.mapper.toNoteInsertDto
 import com.lucho314.spotter.data.mapper.toSessionInsertDto
 import com.lucho314.spotter.data.mapper.toSetInsertDto
 import com.lucho314.spotter.data.remote.datasource.WorkoutRemoteDataSource
@@ -27,6 +28,16 @@ import kotlinx.coroutines.flow.map
  */
 internal fun isRoutineForeignKeyViolation(error: AppError): Boolean = error is AppError.Server && error.code == "23503"
 
+/**
+ * Exercise notes are uploaded only after the session and its sets already made it, so failing them
+ * must never fail the workout permanently: `SyncPendingWorkoutsUseCase` reacts to a permanent
+ * failure by deleting the remote session. Only errors that a later retry can fix (network, 5xx or
+ * an unidentified server error) are reported; anything else (e.g. `workout_exercise_notes` not yet
+ * deployed, or a rejected row) drops the notes and lets the workout count as synced.
+ */
+internal fun isRetryableNoteUploadError(error: AppError): Boolean =
+    error == AppError.Network || (error is AppError.Server && (error.code == null || error.code.startsWith("5")))
+
 /** The offline outbox (ADR A3-b): [upload] is idempotent, safe to retry after a partial failure. */
 @Singleton
 class PendingWorkoutRepositoryImpl @Inject constructor(
@@ -43,13 +54,20 @@ class PendingWorkoutRepositoryImpl @Inject constructor(
         dao.getPending(userId).map { it.toDomain() }
 
     override suspend fun upload(workout: PendingWorkout): AppResult<Unit> {
-        val result = uploadOnce(workout)
+        var result = uploadOnce(workout)
         if (result is AppResult.Failure && workout.routineId != null && isRoutineForeignKeyViolation(result.error)) {
             // Retry once, unlinked, instead of permanently failing a perfectly real workout over a
             // stale foreign key (observation from the FASE 4 review).
-            return uploadOnce(workout.copy(routineId = null))
+            result = uploadOnce(workout.copy(routineId = null))
         }
-        return result
+        if (result is AppResult.Failure) return result
+        return uploadExerciseNotes(workout)
+    }
+
+    private suspend fun uploadExerciseNotes(workout: PendingWorkout): AppResult<Unit> {
+        if (workout.exerciseNotes.isEmpty()) return AppResult.Success(Unit)
+        val result = safeCall { remote.uploadExerciseNotes(workout.exerciseNotes.map { it.toNoteInsertDto(workout.id) }) }
+        return if (result is AppResult.Failure && isRetryableNoteUploadError(result.error)) result else AppResult.Success(Unit)
     }
 
     private suspend fun uploadOnce(workout: PendingWorkout): AppResult<Unit> = safeCall {

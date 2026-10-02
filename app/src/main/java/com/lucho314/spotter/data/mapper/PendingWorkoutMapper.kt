@@ -1,10 +1,13 @@
 package com.lucho314.spotter.data.mapper
 
 import com.lucho314.spotter.core.database.entity.PendingWorkoutEntity
+import com.lucho314.spotter.core.database.entity.PendingWorkoutExerciseNoteEntity
 import com.lucho314.spotter.core.database.entity.PendingWorkoutSetEntity
 import com.lucho314.spotter.core.database.entity.PendingWorkoutWithSets
+import com.lucho314.spotter.data.remote.dto.WorkoutExerciseNoteInsertDto
 import com.lucho314.spotter.data.remote.dto.WorkoutSessionInsertDto
 import com.lucho314.spotter.data.remote.dto.WorkoutSetInsertDto
+import com.lucho314.spotter.domain.model.PendingExerciseNote
 import com.lucho314.spotter.domain.model.PendingSet
 import com.lucho314.spotter.domain.model.PendingStatus
 import com.lucho314.spotter.domain.model.PendingWorkout
@@ -22,6 +25,7 @@ fun PendingWorkoutWithSets.toDomain(): PendingWorkout = PendingWorkout(
     status = PendingStatus.valueOf(workout.status),
     lastError = workout.lastError,
     attempts = workout.attempts,
+    exerciseNotes = exerciseNotes.sortedBy { it.exerciseId }.map { PendingExerciseNote(exerciseId = it.exerciseId, note = it.note) },
 )
 
 fun PendingWorkoutSetEntity.toDomain(): PendingSet = PendingSet(
@@ -85,4 +89,16 @@ fun PendingSet.toSetInsertDto(sessionId: String): WorkoutSetInsertDto = WorkoutS
     reps = reps,
     isWarmup = isWarmup,
     completedAt = completedAt.toTimestampString(),
+)
+
+fun PendingExerciseNote.toEntity(workoutId: String): PendingWorkoutExerciseNoteEntity = PendingWorkoutExerciseNoteEntity(
+    workoutId = workoutId,
+    exerciseId = exerciseId,
+    note = note,
+)
+
+fun PendingExerciseNote.toNoteInsertDto(sessionId: String): WorkoutExerciseNoteInsertDto = WorkoutExerciseNoteInsertDto(
+    sessionId = sessionId,
+    exerciseId = exerciseId,
+    note = note,
 )
