@@ -33,7 +33,13 @@ data class ActiveExercise(
     val sets: List<ActiveSet>,
     /** Raw text as typed (may be blank); normalized with `ExerciseNote.normalize` when finishing. */
     val note: String? = null,
-)
+    /** Reps in reserve of the last working set (0..[MAX_RIR]); recorded once per exercise, attached to its last completed working set on finish. */
+    val rir: Int? = null,
+) {
+    companion object {
+        const val MAX_RIR = 3
+    }
+}
 
 data class ActiveSet(
     val id: String,

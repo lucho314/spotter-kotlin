@@ -75,6 +75,31 @@ class FinishWorkoutUseCaseTest {
     }
 
     @Test
+    fun `rir is attached only to the last completed working set of the exercise`() = runTest {
+        val done = Instant.ofEpochSecond(10)
+        val base = workout(WeightUnit.KG, emptyList())
+        val workout = base.copy(
+            exercises = listOf(
+                base.exercises.single().copy(
+                    rir = 2,
+                    sets = listOf(
+                        set("warm", "20", "10", done, isWarmup = true),
+                        set("w1", "80", "10", done),
+                        set("w2", "80", "10", done),
+                        set("skipped", "80", "10", completedAt = null),
+                    ),
+                ),
+            ),
+        )
+        activeWorkoutRepository.start(workout)
+
+        useCase(USER_ID, "session-1")
+
+        val sets = activeWorkoutRepository.movedToOutbox.single().sets
+        assertThat(sets.associate { it.id to it.rir }).containsExactly("warm", null, "w1", null, "w2", 2)
+    }
+
+    @Test
     fun `converts lb input to kg for the outbox`() = runTest {
         val workout = workout(WeightUnit.LB, listOf(set("set-1", "100", "10", Instant.ofEpochSecond(10))))
         activeWorkoutRepository.start(workout)

@@ -13,7 +13,10 @@ data class WorkoutSet(
     val rpe: Double?,
     val isWarmup: Boolean,
     val completedAt: Instant,
-)
+) {
+    /** Reps in reserve, derived from [rpe] (`rir = 10 - rpe`); null when no RPE was recorded. */
+    val rir: Double? get() = rpe?.let { (10.0 - it).coerceAtLeast(0.0) }
+}
 
 data class WorkoutSessionSummary(
     val id: String,

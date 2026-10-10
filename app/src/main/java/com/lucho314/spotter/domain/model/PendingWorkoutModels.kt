@@ -33,4 +33,6 @@ data class PendingSet(
     val reps: Int,
     val isWarmup: Boolean,
     val completedAt: Instant,
+    /** Reps in reserve (0..3); sent to Supabase as `rpe = 10 - rir`. */
+    val rir: Int? = null,
 )

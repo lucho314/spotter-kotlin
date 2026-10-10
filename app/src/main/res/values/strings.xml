@@ -246,6 +246,7 @@
     <string name="workout_last_session_title">Último entrenamiento</string>
     <string name="workout_last_session_empty">Todavía no entrenaste este ejercicio.</string>
     <string name="workout_last_session_total_volume">Volumen total</string>
+    <string name="workout_rir_label">RIR DE LA ÚLTIMA SERIE</string>
     <string name="workout_note_add">Agregar nota</string>
     <string name="workout_note_edit">Editar nota</string>
     <string name="workout_note_placeholder">Ej: la próxima aumentar</string>
@@ -342,6 +343,7 @@
     <string name="session_detail_delete_set_confirm_message">¿Eliminás la serie %1$d de %2$s?</string>
     <string name="session_detail_edit_set_cd">Editar serie</string>
     <string name="session_detail_delete_set_cd">Eliminar serie</string>
+    <string name="session_detail_rir">RIR %1$s</string>
     <string name="session_detail_warmup">Calentamiento</string>
 
     <!-- Progress -->

@@ -165,6 +165,7 @@ fun WorkoutScreen(
                 display = viewModel::display,
                 noteText = viewModel::noteText,
                 onNoteChange = viewModel::onNoteChange,
+                onRirChange = viewModel::onRirChange,
                 onClose = { showDiscardConfirm = true },
                 onFinishClick = { showFinishConfirm = true },
                 onSelectExercise = viewModel::onSelectExercise,
@@ -231,6 +232,7 @@ private fun WorkoutContent(
     display: (ActiveSet) -> ActiveSet,
     noteText: (ActiveExercise) -> String,
     onNoteChange: (Long, String) -> Unit,
+    onRirChange: (ActiveExercise, Int) -> Unit,
     onClose: () -> Unit,
     onFinishClick: () -> Unit,
     onSelectExercise: (Int) -> Unit,
@@ -339,6 +341,13 @@ private fun WorkoutContent(
                 }
                 item {
                     AddSetButton(onClick = { onAddSet(exercise.rowId) }, modifier = Modifier.padding(top = Spacing.sm))
+                }
+                item {
+                    RirSelector(
+                        selected = exercise.rir,
+                        onSelect = { onRirChange(exercise, it) },
+                        modifier = Modifier.padding(top = Spacing.md),
+                    )
                 }
                 item {
                     ExerciseNavigation(
@@ -501,6 +510,40 @@ private fun ExerciseHeader(
             showBackground = false,
             modifier = Modifier.fillMaxWidth().height(200.dp),
         )
+    }
+}
+
+/** Reps in reserve of the exercise's last working set: 0, 1, 2 and "3+" (see [ActiveExercise.rir]). */
+@Composable
+private fun RirSelector(selected: Int?, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Text(
+            text = stringResource(R.string.workout_rir_label),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp),
+            color = SpotterColors.OnSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), modifier = Modifier.fillMaxWidth()) {
+            for (value in 0..ActiveExercise.MAX_RIR) {
+                val isSelected = value == selected
+                val label = if (value == ActiveExercise.MAX_RIR) "$value+" else value.toString()
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(SpotterShapes.CompactField)
+                        .background(if (isSelected) SpotterColors.PrimaryContainer else SpotterColors.SurfaceHighest)
+                        .clickable(role = Role.RadioButton) { onSelect(value) }
+                        .semantics { contentDescription = label },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (isSelected) SpotterColors.OnPrimary else SpotterColors.OnSurface,
+                    )
+                }
+            }
+        }
     }
 }
 

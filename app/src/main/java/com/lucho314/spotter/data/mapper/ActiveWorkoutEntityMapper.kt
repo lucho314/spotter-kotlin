@@ -48,6 +48,7 @@ fun ActiveExerciseWithSets.toDomain(): ActiveExercise = ActiveExercise(
     restSeconds = exercise.restSeconds,
     sets = sets.sortedBy { it.setNumber }.map { it.toDomain() },
     note = exercise.note,
+    rir = exercise.rir,
 )
 
 fun ActiveSetEntity.toDomain(): ActiveSet = ActiveSet(
@@ -86,6 +87,7 @@ fun ActiveExercise.toEntity(sessionId: String): ActiveExerciseEntity = ActiveExe
     targetReps = targetReps,
     restSeconds = restSeconds,
     note = note,
+    rir = rir,
 )
 
 fun ActiveSet.toEntity(activeExerciseId: Long): ActiveSetEntity = ActiveSetEntity(

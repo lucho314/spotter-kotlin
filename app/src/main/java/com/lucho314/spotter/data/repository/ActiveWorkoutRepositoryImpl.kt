@@ -94,6 +94,10 @@ class ActiveWorkoutRepositoryImpl @Inject constructor(
         activeWorkoutDao.updateExerciseNote(exerciseRowId, note)
     }
 
+    override suspend fun updateExerciseRir(exerciseRowId: Long, rir: Int?) {
+        activeWorkoutDao.updateExerciseRir(exerciseRowId, rir)
+    }
+
     override suspend fun addSet(exerciseRowId: Long, setId: String, weightText: String, repsText: String) {
         // Atomic (computes the next set_number and inserts in the same transaction): see
         // ActiveWorkoutDao.insertNextSet's KDoc for why a two-step read-then-write isn't safe here.

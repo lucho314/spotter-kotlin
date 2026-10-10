@@ -210,6 +210,12 @@ class WorkoutViewModel @Inject constructor(
         }
     }
 
+    /** Tapping the selected value again clears it. A single tap, so it persists immediately (no draft/debounce). */
+    fun onRirChange(exercise: ActiveExercise, rir: Int) {
+        val newValue = rir.takeIf { it != exercise.rir }
+        viewModelScope.launch { activeWorkoutRepository.updateExerciseRir(exercise.rowId, newValue) }
+    }
+
     private suspend fun flushNoteDraft(exerciseRowId: Long) {
         val text = noteDrafts[exerciseRowId] ?: return
         activeWorkoutRepository.updateExerciseNote(exerciseRowId, text.ifEmpty { null })
