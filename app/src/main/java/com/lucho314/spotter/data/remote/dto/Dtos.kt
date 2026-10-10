@@ -295,6 +295,7 @@ data class WorkoutSetInsertDto(
     @SerialName("set_number") val setNumber: Int,
     @SerialName("weight_kg") val weightKg: Double,
     val reps: Int,
+    val rpe: Double? = null,
     @SerialName("is_warmup") val isWarmup: Boolean,
     @SerialName("completed_at") val completedAt: String,
 )

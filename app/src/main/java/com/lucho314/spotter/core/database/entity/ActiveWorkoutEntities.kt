@@ -61,6 +61,8 @@ data class ActiveExerciseEntity(
     @ColumnInfo(name = "target_reps") val targetReps: Int,
     @ColumnInfo(name = "rest_seconds") val restSeconds: Int,
     @ColumnInfo(name = "note") val note: String? = null,
+    /** Reps in reserve of the exercise's last working set (0..3, 3 = "3+"); null = not recorded. */
+    @ColumnInfo(name = "rir") val rir: Int? = null,
 )
 
 @Entity(

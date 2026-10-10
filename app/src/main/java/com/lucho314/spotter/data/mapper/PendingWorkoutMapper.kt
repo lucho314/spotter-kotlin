@@ -14,6 +14,9 @@ import com.lucho314.spotter.domain.model.PendingWorkout
 
 private const val COMPLETED_STATUS = "completed"
 
+/** RPE 10 = no reps left, so `rpe = 10 - rir`. */
+private const val RIR_RPE_BASE = 10.0
+
 fun PendingWorkoutWithSets.toDomain(): PendingWorkout = PendingWorkout(
     id = workout.id,
     userId = workout.userId,
@@ -36,6 +39,7 @@ fun PendingWorkoutSetEntity.toDomain(): PendingSet = PendingSet(
     reps = reps,
     isWarmup = isWarmup,
     completedAt = completedAt.toInstant(),
+    rir = rir,
 )
 
 /**
@@ -67,6 +71,7 @@ fun PendingSet.toEntity(workoutId: String): PendingWorkoutSetEntity = PendingWor
     reps = reps,
     isWarmup = isWarmup,
     completedAt = completedAt.toTimestampString(),
+    rir = rir,
 )
 
 /** Pending workouts only ever represent finished sessions (ADR A3-b), so status is always `completed`. */
@@ -87,6 +92,7 @@ fun PendingSet.toSetInsertDto(sessionId: String): WorkoutSetInsertDto = WorkoutS
     setNumber = setNumber,
     weightKg = weightKg,
     reps = reps,
+    rpe = rir?.let { RIR_RPE_BASE - it.toDouble() },
     isWarmup = isWarmup,
     completedAt = completedAt.toTimestampString(),
 )

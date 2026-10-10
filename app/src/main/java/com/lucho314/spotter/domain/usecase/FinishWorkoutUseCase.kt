@@ -52,7 +52,11 @@ class FinishWorkoutUseCase @Inject constructor(
 
         val now = timeProvider.now()
         val pendingSets = workout.exercises.flatMap { exercise ->
-            exercise.sets.filter { it.isCompleted }.map { set ->
+            val completed = exercise.sets.filter { it.isCompleted }
+            // The RIR is recorded once per exercise and belongs to its last working set (falling
+            // back to the last completed set if only warm-ups were done).
+            val rirSetId = (completed.lastOrNull { !it.isWarmup } ?: completed.lastOrNull())?.id
+            completed.map { set ->
                 val weightInUnit = ActiveSetWeight.parse(set.weightText, exercise.equipment) ?: 0.0
                 PendingSet(
                     id = set.id,
@@ -62,6 +66,7 @@ class FinishWorkoutUseCase @Inject constructor(
                     reps = set.repsText.trim().toIntOrNull() ?: 0,
                     isWarmup = set.isWarmup,
                     completedAt = set.completedAt ?: now,
+                    rir = exercise.rir?.takeIf { set.id == rirSetId },
                 )
             }
         }

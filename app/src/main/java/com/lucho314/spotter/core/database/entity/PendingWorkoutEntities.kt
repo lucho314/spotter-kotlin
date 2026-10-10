@@ -50,6 +50,7 @@ data class PendingWorkoutSetEntity(
     @ColumnInfo(name = "reps") val reps: Int,
     @ColumnInfo(name = "is_warmup") val isWarmup: Boolean,
     @ColumnInfo(name = "completed_at") val completedAt: String,
+    @ColumnInfo(name = "rir") val rir: Int? = null,
 )
 
 /** One note per exercise of an outbox workout; uploaded to `workout_exercise_notes` after its sets. */
