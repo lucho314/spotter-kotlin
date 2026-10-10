@@ -274,8 +274,9 @@ private fun WorkoutSetRow(set: WorkoutSet, weightUnit: WeightUnit, saving: Boole
         val unitLabel = if (weightUnit == WeightUnit.KG) stringResource(R.string.unit_kg) else stringResource(R.string.unit_lb)
         val repsLabel = pluralStringResource(R.plurals.reps_count, set.reps, set.reps)
         val warmupSuffix = if (set.isWarmup) " · ${stringResource(R.string.session_detail_warmup)}" else ""
+        val rirSuffix = set.rir?.let { " · ${stringResource(R.string.session_detail_rir, java.math.BigDecimal.valueOf(it).stripTrailingZeros().toPlainString())}" }.orEmpty()
         Text(
-            text = "#${set.setNumber} · ${WeightConverter.format(set.weightKg, weightUnit)} $unitLabel · $repsLabel$warmupSuffix",
+            text = "#${set.setNumber} · ${WeightConverter.format(set.weightKg, weightUnit)} $unitLabel · $repsLabel$warmupSuffix$rirSuffix",
             style = MaterialTheme.typography.bodyLarge,
             color = SpotterColors.OnSurface,
         )

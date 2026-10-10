@@ -343,6 +343,7 @@
     <string name="session_detail_delete_set_confirm_message">¿Eliminás la serie %1$d de %2$s?</string>
     <string name="session_detail_edit_set_cd">Editar serie</string>
     <string name="session_detail_delete_set_cd">Eliminar serie</string>
+    <string name="session_detail_rir">RIR %1$s</string>
     <string name="session_detail_warmup">Calentamiento</string>
 
     <!-- Progress -->
