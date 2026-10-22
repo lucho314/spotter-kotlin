@@ -21,3 +21,9 @@ posteriores están documentados en [`docs/query_index_review_2026-09-29.md`](../
 `migrations/20261001120000_workout_exercise_notes.sql` se aplicó a mano desde el SQL Editor el
 2026-10-01. Crea la tabla de notas por ejercicio que usa el entrenamiento. Su rollback es
 `rollback/20261001_workout_exercise_notes_rollback.sql`.
+
+`migrations/20261022120000_revoke_trigger_function_execute.sql` **no está aplicado**. Quita el
+permiso EXECUTE de `anon`, `authenticated` y `public` sobre las funciones de trigger
+`handle_new_user()` y `update_personal_record()`, que hoy quedan expuestas como `/rest/v1/rpc`
+(advisors 0028/0029). Los triggers siguen funcionando porque Postgres solo exige EXECUTE al crear
+el trigger. Su rollback es `rollback/20261022_revoke_trigger_function_execute_rollback.sql`.
